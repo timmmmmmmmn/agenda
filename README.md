@@ -23,9 +23,6 @@ wrangler.toml           Worker-config en koppeling met de D1-database
 
 Elke push naar `main` wordt door Cloudflare automatisch gedeployed (`npx wrangler deploy`).
 
-```
-```
-
 ## Hoe het werkt
 
 - **Accounts**: iedereen kan zich registreren. Het eerste account wordt beheerder
