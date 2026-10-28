@@ -869,6 +869,10 @@ async function renderMenu() {
       <button type="button" data-theme="donker">Donker</button>
     </div>
     <div class="sep"></div>
+    <div class="menu-label">Broncode</div>
+    <a class="src-link" href="https://github.com/timmmmmmmmn/agenda" target="_blank" rel="noopener">Website <span>GitHub ↗</span></a>
+    <a class="src-link" href="https://github.com/timmmmmmmmn/agenda-android" target="_blank" rel="noopener">Android-app <span>GitHub ↗</span></a>
+    <div class="sep"></div>
     ${appVersion() ? `<button type="button" id="checkUpdate">App bijwerken <span class="label" style="font-size:13px">versie ${esc(appVersion())}</span></button>` : ''}
     <button type="button" id="logout" class="danger">Uitloggen</button>`;
   $('#iosPromo')?.addEventListener('click', (e) => {
