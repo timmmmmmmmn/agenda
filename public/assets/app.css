@@ -545,6 +545,7 @@ html.app #moreBody .menu { display: contents; }
 html.app #moreBody .who { order: -1; }
 html.app #moreBody > section { order: 0; }
 html.app #moreBody .menu > a, html.app #moreBody .menu .menu-label, html.app #moreBody .theme-pick, html.app #moreBody .menu .sep { order: 1; }
+html.app #moreBody #checkUpdate { order: 2; }
 html.app #moreBody #logout { order: 3; }
 html.app #moreBody .menu .sep:last-of-type { order: 2; }
 html.app #moreBody .menu { position: static; width: auto; padding: 0; border: 0; box-shadow: none; animation: none; background: transparent; }
@@ -560,6 +561,120 @@ html.app #moreBody .cal-row { min-height: 44px; font-size: 15px; }
   .sd:not(.on):hover .dn { background: transparent; }
   .primary:hover { background: var(--accent); }
 }
+
+/* ======================================================================
+   App-stijl: eigen gezicht, afgeleid van het icoon (zwart + cyaan, smalle vette cijfers)
+   ====================================================================== */
+
+html.app {
+  --font-ui: 'Instrument Sans', -apple-system, system-ui, sans-serif;
+  --font-num: 'Barlow Condensed', 'Instrument Sans', system-ui, sans-serif;
+  --bg: #F4F4F2;
+  --surface: #FFFFFF;
+  --surface-2: #F4F4F2;
+  --ink: #0B0D10;
+  --on-ink: #FFFFFF;
+  --text: #0B0D10;
+  --text2: #33373D;
+  --muted: #6B6F76;
+  --line: rgba(11, 13, 16, .08);
+  --border: rgba(11, 13, 16, .08);
+  --chip: rgba(11, 13, 16, .05);
+  --sticky: #FFFFFF;
+  --today: transparent;
+  --accent: #0094E8;
+  --accent-ink: #0076BA;
+  --accent-soft: rgba(0, 148, 232, .12);
+  --cyan: #2FD3FF;
+  --now: #FF3B30;
+  --edge-tint: rgba(255, 255, 255, .9);
+}
+html.app[data-theme="donker"] {
+  --bg: #0A0B0D;
+  --surface: #111316;
+  --surface-2: #1A1C20;
+  --ink: #F2F3F5;
+  --on-ink: #0B0D10;
+  --text: #F2F3F5;
+  --text2: #C4C8CF;
+  --muted: #8C929B;
+  --line: rgba(255, 255, 255, .08);
+  --border: rgba(255, 255, 255, .08);
+  --chip: rgba(255, 255, 255, .07);
+  --sticky: #111316;
+  --today: transparent;
+  --accent: #39C6FF;
+  --accent-ink: #7FDBFF;
+  --accent-soft: rgba(57, 198, 255, .14);
+  --edge-tint: rgba(17, 19, 22, .9);
+}
+
+html.app body { font-family: var(--font-ui); letter-spacing: -.005em; }
+
+/* Kop: weekdag klein, datum groot in smalle vette cijfers */
+html.app .topbar .title strong { font-family: var(--font-num); font-size: 30px; font-weight: 700; letter-spacing: 0; line-height: 1; }
+html.app .topbar .title span { font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-top: 3px; }
+html.app .topbar .btn-group > button { color: var(--text); font-weight: 600; }
+html.app .topbar .btn-group > .icon-only { color: var(--text); }
+
+/* Cijfers overal in dezelfde smalle letter */
+html.app .sd .dn, html.app .day-head .dn, html.app .mcell .mn, html.app .tg-hours span { font-family: var(--font-num); }
+html.app .sd .dn, html.app .day-head .dn { font-size: 20px; font-weight: 700; }
+html.app .tg-hours span { font-size: 13px; font-weight: 600; }
+html.app .mcell .mn { font-size: 16px; font-weight: 700; }
+html.app .sd .dw, html.app .day-head .dw, html.app .month-dows span { font-size: 10.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+
+/* Geselecteerd = zwart, vandaag = cyaan */
+html.app .sd.on .dn, html.app .day-head.today .dn, html.app .mcell.today .mn { background: var(--ink); color: var(--on-ink); box-shadow: none; }
+html.app .sd.today:not(.on) .dn { box-shadow: none; color: var(--accent-ink); }
+html.app .sd.today .dw { color: var(--accent-ink); }
+html.app .sd .dot { background: var(--muted); opacity: .5; }
+html.app .sd.on .dot { background: var(--ink); opacity: 1; }
+html.app .mcell.out { background: transparent; }
+html.app .mcell.out .mn { color: var(--muted); opacity: .6; }
+
+/* Afspraken: effen kleurvlakken, witte tekst */
+html.app .ev, html.app .chip { background: var(--solid); color: #fff; box-shadow: none; border-radius: 7px; }
+html.app .ev .t { font-weight: 600; }
+html.app .ev .s { opacity: .82; }
+html.app .ev.sel, html.app .chip.sel { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--solid); }
+html.app .now-line { height: 2px; }
+
+/* Zwevende navigatie: strakke balk, actief tabblad zwart, + als cyaan tegel */
+html.app .appnav-pill { height: 62px; padding: 5px; border-radius: 22px; background: var(--surface); -webkit-backdrop-filter: none; backdrop-filter: none; border: 1px solid var(--line); box-shadow: 0 1px 2px rgba(0, 0, 0, .06), 0 10px 28px rgba(0, 0, 0, .1); }
+html.app .appnav-ind { top: 5px; bottom: 5px; left: 5px; width: calc((100% - 10px) / 5); border-radius: 17px; background: var(--ink); transition: transform 240ms cubic-bezier(.2, .8, .2, 1); }
+html.app .appnav-pill button { border-radius: 17px; color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; gap: 3px; }
+html.app .appnav-pill button .icon { width: 21px; height: 21px; stroke-width: 2; }
+html.app .appnav-pill button[aria-current="true"] { color: var(--on-ink); }
+html.app .appnav-add.primary { width: 62px; height: 62px; border-radius: 22px; background: var(--cyan); color: #0B0D10; box-shadow: 0 1px 2px rgba(0, 0, 0, .1), 0 10px 24px rgba(0, 0, 0, .12); }
+html.app .appnav-add.primary:hover { background: var(--cyan); }
+html.app .appnav-add .icon { stroke-width: 2.6; }
+
+/* Knoppen en velden */
+html.app .primary, html.app .primary:hover { background: var(--ink); color: var(--on-ink); box-shadow: none; }
+html.app .btn, html.app .btn:hover { background: var(--surface-2); border-color: transparent; box-shadow: none; }
+html.app .btn-group { background: transparent; }
+html.app .field { background: var(--surface-2); border-color: transparent; border-radius: 12px; }
+html.app .field:focus { background: var(--surface); border-color: var(--ink); box-shadow: none; }
+html.app .form-label > span:first-child { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; }
+html.app .segmented .pill, html.app .scope-seg .pill { background: var(--ink); box-shadow: none; }
+html.app .segmented button[aria-pressed="true"] { color: var(--on-ink); }
+html.app .theme-pick button[aria-pressed="true"] { background: var(--ink); color: var(--on-ink); border-color: var(--ink); }
+html.app .search:focus-within { border-color: var(--ink); box-shadow: var(--shadow-lg); }
+html.app .check input { accent-color: var(--ink); }
+html.app .link { color: var(--accent-ink); }
+
+/* Panelen van onderen */
+html.app dialog .sheet { border-radius: 22px 22px 0 0; box-shadow: 0 -8px 30px rgba(0, 0, 0, .12); }
+html.app dialog::backdrop { background: rgba(0, 0, 0, .35); }
+html.app .sheet h2 { font-size: 22px; letter-spacing: -.01em; }
+
+/* Meldingen boven de navigatie */
+html.app .toast { bottom: calc(var(--app-bottom) + 6px); border-radius: 14px; background: var(--ink); color: var(--on-ink); }
+
+/* Inloggen in de app: zelfde gezicht */
+html.app .auth-card { box-shadow: none; border-color: var(--line); }
+html.app .auth-card h1, html.app .settings-head h1 { font-family: var(--font-num); font-size: 34px; font-weight: 700; letter-spacing: 0; }
 
 /* ---------- Responsief ---------- */
 

@@ -831,7 +831,14 @@ async function renderMenu() {
       <button type="button" data-theme="donker">Donker</button>
     </div>
     <div class="sep"></div>
+    ${appVersion() ? `<button type="button" id="checkUpdate">App bijwerken <span class="label" style="font-size:13px">versie ${esc(appVersion())}</span></button>` : ''}
     <button type="button" id="logout" class="danger">Uitloggen</button>`;
+  $('#checkUpdate')?.addEventListener('click', () => {
+    toggleMenu(false);
+    try {
+      window.AgendaNative.checkForUpdate();
+    } catch {}
+  });
   const paintTheme = () => $$('#menu .theme-pick button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.theme === themePref())));
   paintTheme();
   $$('#menu .theme-pick button').forEach((b) => b.addEventListener('click', () => {
@@ -845,6 +852,14 @@ async function renderMenu() {
       location.replace('/login');
     }
   });
+}
+
+function appVersion() {
+  try {
+    return window.AgendaNative?.appVersion?.() || '';
+  } catch {
+    return '';
+  }
 }
 
 function toggleMenu(open) {

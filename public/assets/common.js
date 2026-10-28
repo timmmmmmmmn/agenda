@@ -199,6 +199,6 @@ export function calStyle(hex) {
   const r = n >> 16, g = (n >> 8) & 255, b = n & 255;
   const mix = (t, a) => Math.round(r + (t - r) * a) + ',' + Math.round(g + (t - g) * a) + ',' + Math.round(b + (t - b) * a);
   return isDark()
-    ? `--c:${hex};--tint:rgba(${r},${g},${b},.26);--ink:rgb(${mix(255, .72)})`
-    : `--c:${hex};--tint:rgba(${r},${g},${b},.17);--ink:rgb(${mix(0, .5)})`;
+    ? `--c:${hex};--tint:rgba(${r},${g},${b},.26);--ink:rgb(${mix(255, .72)});--solid:rgb(${mix(0, .12)})`
+    : `--c:${hex};--tint:rgba(${r},${g},${b},.17);--ink:rgb(${mix(0, .5)});--solid:rgb(${mix(0, .14)})`;
 }
