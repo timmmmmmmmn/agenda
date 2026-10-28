@@ -1,4 +1,4 @@
-import { api, esc, $, $$, icon, bindThemeButton, toast, showError, initials, calStyle } from './common.js';
+import { api, esc, $, $$, icon, toast, showError, initials, calStyle, applyTheme, themePref } from './common.js';
 
 const HOUR = 52;
 const MONTHS = ['januari', 'februari', 'maart', 'april', 'mei', 'juni', 'juli', 'augustus', 'september', 'oktober', 'november', 'december'];
@@ -61,48 +61,103 @@ const state = {
 const calById = (id) => state.cals.find((c) => c.id === id);
 const occId = (o) => `${o.id}|${o.key}`;
 
-function range() {
-  if (state.view === 'day') return [state.cursor, addDays(state.cursor, 1)];
-  if (state.view === 'week') {
-    const s = startOfWeek(state.cursor);
+function rangeFor(view, cursor) {
+  if (view === 'day') return [cursor, addDays(cursor, 1)];
+  if (view === 'week') {
+    const s = startOfWeek(cursor);
     return [s, addDays(s, 7)];
   }
-  const s = startOfWeek(new Date(state.cursor.getFullYear(), state.cursor.getMonth(), 1));
+  const s = startOfWeek(new Date(cursor.getFullYear(), cursor.getMonth(), 1));
   return [s, addDays(s, 42)];
+}
+
+const range = () => rangeFor(state.view, state.cursor);
+
+function shifted(view, cursor, dir) {
+  if (view === 'day') return addDays(cursor, dir);
+  if (view === 'week') return addDays(cursor, 7 * dir);
+  return new Date(cursor.getFullYear(), cursor.getMonth() + dir, 1);
 }
 
 // ---------- Laden ----------
 
 let loadSeq = 0;
+const cache = new Map();
+const rangeKey = ([a, b]) => `${a.getTime()}|${b.getTime()}`;
 
 function setSync(kind, text) {
   $('#sync').className = `sync ${kind}`;
   $('#syncText').textContent = text;
 }
 
-async function load({ animate = false } = {}) {
+async function fetchRange(r) {
+  const [from, to] = r;
+  const events = await api(`events?from=${encodeURIComponent(from.toISOString())}&to=${encodeURIComponent(to.toISOString())}`);
+  const mapped = events.map((o) => ({
+    ...o,
+    startD: o.allDay ? parseYmd(o.start) : new Date(o.start),
+    endD: o.allDay ? parseYmd(o.end) : new Date(o.end)
+  }));
+  cache.set(rangeKey(r), mapped);
+  return mapped;
+}
+
+// Buren alvast ophalen, zodat vorige/volgende meteen klaar staan.
+function prefetch() {
+  const run = () => {
+    for (const dir of [1, -1]) {
+      const r = rangeFor(state.view, shifted(state.view, state.cursor, dir));
+      if (!cache.has(rangeKey(r))) fetchRange(r).catch(() => {});
+    }
+  };
+  if ('requestIdleCallback' in window) requestIdleCallback(run, { timeout: 800 });
+  else setTimeout(run, 200);
+}
+
+async function loadCals() {
+  state.cals = await api('calendars');
+}
+
+// Meteen tekenen met wat we al hebben, daarna stil bijwerken.
+async function load({ animate = false, cals = false } = {}) {
   const seq = ++loadSeq;
-  const [from, to] = range();
+  const r = range();
+  const cached = cache.get(rangeKey(r));
+  if (cached || animate) {
+    state.events = cached || [];
+    state.animate = animate && !!cached;
+    render();
+  }
   setSync('busy', 'Bijwerken…');
   try {
-    const [cals, events] = await Promise.all([
-      api('calendars'),
-      api(`events?from=${encodeURIComponent(from.toISOString())}&to=${encodeURIComponent(to.toISOString())}`)
-    ]);
+    const [events] = await Promise.all([fetchRange(r), cals ? loadCals() : null]);
     if (seq !== loadSeq) return;
-    state.cals = cals;
-    state.events = events.map((o) => ({
-      ...o,
-      startD: o.allDay ? parseYmd(o.start) : new Date(o.start),
-      endD: o.allDay ? parseYmd(o.end) : new Date(o.end)
-    }));
+    const changed = !cached || JSON.stringify(events.map(occId)) !== JSON.stringify(state.events.map(occId)) || cals;
+    state.events = events;
     setSync('', 'Gesynchroniseerd');
+    if (changed || !cached) {
+      state.animate = animate && !cached;
+      render();
+    } else if (cached) {
+      // Zelfde afspraken; inhoud kan wel gewijzigd zijn (titel, tijd).
+      renderBoard();
+      renderDetail();
+    }
+    if (state.pendingSelect != null) {
+      const o = state.events.find((x) => x.id === state.pendingSelect);
+      state.pendingSelect = null;
+      if (o) select(occId(o));
+    }
+    prefetch();
   } catch (err) {
     if (err.status === 401) return location.replace('/login');
-    setSync('err', 'Niet verbonden');
+    if (seq === loadSeq) setSync('err', 'Niet verbonden');
   }
-  state.animate = animate;
-  render();
+}
+
+function refresh() {
+  cache.clear();
+  return load({ cals: true });
 }
 
 const visible = () => state.events.filter((e) => !state.hidden.has(e.calendar_id) && calById(e.calendar_id));
@@ -344,7 +399,8 @@ function renderMonth() {
 function renderBoard() {
   const board = $('#board');
   const prev = $('#scroller');
-  const keepScroll = prev && !state.animate ? prev.scrollTop : null;
+  const keepScroll = prev && !state.resetScroll ? prev.scrollTop : null;
+  state.resetScroll = false;
   if (state.view === 'month') board.innerHTML = renderMonth();
   else {
     const [s] = range();
@@ -371,11 +427,9 @@ function select(id) {
 // ---------- Navigatie ----------
 
 function go(dir) {
-  const c = state.cursor;
-  if (state.view === 'day') state.cursor = addDays(c, dir);
-  else if (state.view === 'week') state.cursor = addDays(c, 7 * dir);
-  else state.cursor = new Date(c.getFullYear(), c.getMonth() + dir, 1);
+  state.cursor = shifted(state.view, state.cursor, dir);
   state.miniMonth = null;
+  state.resetScroll = true;
   load({ animate: true });
 }
 
@@ -384,6 +438,7 @@ function setView(v) {
   state.view = v;
   store.set('view', v);
   state.miniMonth = null;
+  state.resetScroll = true;
   load({ animate: true });
 }
 
@@ -394,6 +449,7 @@ function gotoDay(s, view = 'day') {
     state.view = view;
     store.set('view', view);
   }
+  state.resetScroll = true;
   load({ animate: true });
 }
 
@@ -500,14 +556,14 @@ function fillFields(src) {
 }
 
 // Bij een herhaling: alleen dit voorkomen, of de hele reeks.
-function setScope(scope) {
+function setScope(scope, refill = true) {
   editing.scope = scope;
   const seg = $('#scopeSeg');
   const btns = $$('button', seg);
   btns.forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.scope === scope)));
   seg.querySelector('.pill').style.transform = `translateX(${scope === 'all' ? (btns[0].offsetWidth || 120) + 2 : 0}px)`;
   const ev = editing.ev;
-  fillFields(scope === 'this' ? ev.occurrence : ev);
+  if (refill) fillFields(scope === 'this' ? ev.occurrence : ev);
   $('#repeatLabel').hidden = scope === 'this';
   form.calendar.disabled = scope === 'this';
   $('#recurNote').textContent = scope === 'this'
@@ -518,14 +574,50 @@ function setScope(scope) {
 }
 
 async function openEdit(id, key) {
+  // Direct openen met wat we al weten; details (herhaling, melding) volgen.
+  const occ = state.events.find((x) => String(x.id) === String(id) && (key == null || String(x.key) === String(key)));
+  const token = {};
+  if (occ) {
+    editing = { id: occ.id, readOnly: !occ.can_write, ev: null, scope: 'all', token, dirty: false };
+    form.reset();
+    $('#dlgTitle').textContent = occ.can_write ? 'Afspraak bewerken' : 'Afspraak';
+    $('#dlgFields').disabled = !occ.can_write;
+    $('#dlgSave').hidden = !occ.can_write;
+    $('#dlgSave').disabled = true;
+    $('#dlgDelete').hidden = true;
+    $('#recurNote').hidden = true;
+    $('#scopeSeg').hidden = true;
+    $('#repeatLabel').hidden = false;
+    form.calendar.disabled = false;
+    $('#roNote').hidden = occ.can_write;
+    fillCalendarSelect(occ.calendar_id, true);
+    setRepeat(occ.recurring ? 'weekly' : 'none');
+    fillFields({ ...occ, alarm: null });
+    openDialog();
+  }
   let ev;
   try {
     ev = await api(`events/${id}${key ? `?occurrence=${encodeURIComponent(key)}` : ''}`);
   } catch (err) {
+    if (occ && dlg.open) dlg.close();
     return toast(err.message);
   }
-  editing = { id: ev.id, readOnly: !ev.can_write, ev, scope: 'all' };
-  form.reset();
+  if (occ && (!dlg.open || editing?.token !== token)) return;
+  const dirty = !!editing?.dirty;
+  $('#dlgSave').disabled = false;
+  editing = { id: ev.id, readOnly: !ev.can_write, ev, scope: 'all', token, dirty };
+  if (dirty) {
+    // Gebruiker typt al: alleen aanvullen wat nog ontbrak.
+    setRepeat(ev.repeat);
+    if (form.alarm.value === '') setAlarm(ev.alarm);
+    const recurring = !!ev.occurrence && ev.can_write;
+    $('#recurNote').hidden = !recurring;
+    $('#scopeSeg').hidden = !recurring;
+    $('#dlgDelete').hidden = !ev.can_write;
+    if (recurring) setScope('this', false);
+    return;
+  }
+  if (!occ) form.reset();
   $('#dlgTitle').textContent = ev.can_write ? 'Afspraak bewerken' : 'Afspraak';
   $('#dlgFields').disabled = !ev.can_write;
   $('#dlgSave').hidden = !ev.can_write;
@@ -536,7 +628,7 @@ async function openEdit(id, key) {
   $('#roNote').hidden = ev.can_write;
   fillCalendarSelect(ev.calendar_id, true);
   setRepeat(ev.repeat);
-  openDialog();
+  if (!occ) openDialog();
   if (recurring) setScope('this');
   else fillFields(ev.occurrence || ev);
 }
@@ -601,9 +693,8 @@ async function save(e) {
     dlg.close();
     toast(editing ? 'Afspraak bijgewerkt' : 'Afspraak toegevoegd');
     state.selected = null;
-    await load();
-    const o = state.events.find((x) => x.id === res.id);
-    if (o) select(occId(o));
+    state.pendingSelect = res.id;
+    refresh();
   } catch (err) {
     showError($('#dlgError'), err.message);
   } finally {
@@ -624,15 +715,18 @@ async function remove(id, btn, key = null) {
     }, 4000);
     return;
   }
+  if (dlg.open) dlg.close();
+  state.selected = null;
+  state.events = state.events.filter((x) => !(String(x.id) === String(id) && (key == null || String(x.key) === String(key))));
+  renderBoard();
+  renderDetail();
   try {
     await api(`events/${id}${key != null ? `?occurrence=${encodeURIComponent(key)}` : ''}`, { method: 'DELETE' });
-    if (dlg.open) dlg.close();
-    state.selected = null;
     toast(key != null ? 'Deze afspraak is uit de reeks gehaald' : 'Afspraak verwijderd');
-    load();
   } catch (err) {
     toast(err.message);
   }
+  refresh();
 }
 
 // ---------- Zoeken ----------
@@ -689,7 +783,21 @@ async function renderMenu() {
     <div class="who"><strong>${esc(me.full_name)}</strong><span>@${esc(me.username)}</span></div>
     <a href="/instellingen">Instellingen &amp; apparaten</a>
     ${me.is_admin ? `<a href="/instellingen#beheer">Gebruikers beheren ${pending ? `<span class="count">${pending}</span>` : ''}</a>` : ''}
+    <div class="sep"></div>
+    <div class="menu-label">Weergave</div>
+    <div class="theme-pick" role="group" aria-label="Thema">
+      <button type="button" data-theme="systeem">Systeem</button>
+      <button type="button" data-theme="licht">Licht</button>
+      <button type="button" data-theme="donker">Donker</button>
+    </div>
+    <div class="sep"></div>
     <button type="button" id="logout" class="danger">Uitloggen</button>`;
+  const paintTheme = () => $$('#menu .theme-pick button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.theme === themePref())));
+  paintTheme();
+  $$('#menu .theme-pick button').forEach((b) => b.addEventListener('click', () => {
+    applyTheme(b.dataset.theme);
+    paintTheme();
+  }));
   $('#logout').addEventListener('click', async () => {
     try {
       await api('logout', { method: 'POST' });
@@ -720,7 +828,6 @@ async function init() {
   $('#newBtn').innerHTML = `${icon('plus')} Nieuwe afspraak`;
   $('#fab').innerHTML = icon('plus');
   $('#dlgClose').innerHTML = icon('close');
-  bindThemeButton($('#themeBtn'));
   renderMenu();
 
   $('#prev').addEventListener('click', () => go(-1));
@@ -858,13 +965,17 @@ async function init() {
 
   // Verversen: elke minuut, en zodra je terugkomt naar het tabblad.
   setInterval(() => {
-    if (document.visibilityState === 'visible') load();
+    if (document.visibilityState === 'visible') load({ cals: true });
   }, 60000);
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') load();
+    if (document.visibilityState === 'visible') load({ cals: true });
+  });
+  form.addEventListener('input', () => {
+    if (editing) editing.dirty = true;
   });
 
-  await load({ animate: true });
+  state.resetScroll = true;
+  await load({ animate: true, cals: true });
 }
 
 init();

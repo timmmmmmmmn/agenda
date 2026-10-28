@@ -13,22 +13,21 @@
 <script type="module" src="/assets/agenda.js"></script>
 </head>
 <body>
-<div class="blobs" aria-hidden="true"><div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div></div>
 
 <div class="shell">
-  <header class="topbar glass rise">
-    <a class="brand" href="/"><span class="brand-mark" id="brandMark"></span><span>Agenda</span></a>
-    <div class="nav-group">
-      <button class="btn press icon-btn" id="prev" type="button" aria-label="Vorige"></button>
-      <button class="btn press icon-btn" id="next" type="button" aria-label="Volgende"></button>
-      <button class="btn press" id="today" type="button">Vandaag</button>
+  <header class="topbar">
+    <a class="brand" href="/"><span class="brand-mark" id="brandMark"></span><span class="brand-name">Agenda</span></a>
+    <div class="btn-group" role="group" aria-label="Navigatie">
+      <button class="icon-only" id="prev" type="button" aria-label="Vorige"></button>
+      <button id="today" type="button">Vandaag</button>
+      <button class="icon-only" id="next" type="button" aria-label="Volgende"></button>
     </div>
     <div class="title"><strong id="title"></strong><span id="subtitle"></span></div>
     <div class="search-wrap">
       <label class="search"><span id="searchIcon"></span><span class="sr-only">Zoeken</span>
         <input type="search" id="q" placeholder="Zoeken" autocomplete="off" aria-controls="results">
       </label>
-      <div class="results glass strong" id="results" role="listbox" hidden></div>
+      <div class="results glass" id="results" role="listbox" hidden></div>
     </div>
     <div class="segmented" role="group" aria-label="Weergave" id="viewSeg">
       <span class="pill" aria-hidden="true"></span>
@@ -36,11 +35,10 @@
       <button type="button" data-view="week">Week</button>
       <button type="button" data-view="month">Maand</button>
     </div>
-    <button class="primary press new-btn" id="newBtn" type="button"></button>
-    <button class="btn press icon-btn round" id="themeBtn" type="button"></button>
+    <button class="primary new-btn" id="newBtn" type="button"></button>
     <div class="menu-wrap">
-      <button class="avatar press" id="avatar" type="button" aria-haspopup="true" aria-expanded="false" aria-label="Accountmenu"></button>
-      <div class="menu glass strong" id="menu" hidden></div>
+      <button class="avatar" id="avatar" type="button" aria-haspopup="true" aria-expanded="false" aria-label="Accountmenu"></button>
+      <div class="menu glass" id="menu" hidden></div>
     </div>
   </header>
 
@@ -54,7 +52,7 @@
       <section class="glass strong panel rise d3 detail-panel" id="detail" aria-label="Geselecteerde afspraak"></section>
       <div class="sync rise d4" id="sync"><span class="dot"></span><span id="syncText">Gesynchroniseerd</span></div>
     </aside>
-    <main class="glass board rise d2" id="board"></main>
+    <main class="glass board" id="board"></main>
   </div>
 </div>
 
