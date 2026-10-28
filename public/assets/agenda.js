@@ -808,7 +808,43 @@ function openSearch() {
   setTimeout(() => $('#q').focus(), 30);
 }
 
+// ---------- App downloaden / op beginscherm ----------
+
+const RELEASES = 'https://github.com/timmmmmmmmn/agenda-android/releases/latest';
+const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
+const isAndroid = /Android/.test(navigator.userAgent);
+// Alleen tonen op een telefoon/tablet, en niet als je de app al gebruikt.
+const promo = !isApp && (isIOS || isAndroid) ? (isIOS ? 'ios' : 'android') : null;
+
+function promoHtml() {
+  const img = '<img src="/icons/icon-192.png" alt="">';
+  if (promo === 'android') {
+    return `<a class="promo" href="${RELEASES}" target="_blank" rel="noopener">${img}
+      <span><strong>Download de Android-app</strong><span>APK van GitHub · werkt zich zelf bij</span></span></a>`;
+  }
+  if (promo === 'ios') {
+    return `<button type="button" class="promo" id="iosPromo" aria-expanded="false">${img}
+      <span><strong>Zet Agenda op je beginscherm</strong><span>Werkt als een app, zonder App Store</span></span></button>
+      <ol class="promo-steps" id="iosSteps" hidden>
+        <li>Tik in Safari op de <strong>deelknop</strong> (vierkantje met pijl omhoog).</li>
+        <li>Kies <strong>Zet op beginscherm</strong>.</li>
+        <li>Tik op <strong>Voeg toe</strong>. Agenda staat nu tussen je apps.</li>
+      </ol>`;
+  }
+  return '';
+}
+
+function promoSeen() {
+  try {
+    return localStorage.getItem('promoSeen') === '1';
+  } catch {
+    return true;
+  }
+}
+
 // ---------- Accountmenu ----------
+
+let pendingCount = 0;
 
 async function renderMenu() {
   const me = state.me;
@@ -818,9 +854,11 @@ async function renderMenu() {
       pending = (await api('admin/users')).filter((u) => u.status === 'pending').length;
     } catch {}
   }
-  $('#avatar').innerHTML = `${esc(initials(me.full_name))}${pending ? '<span class="badge"></span>' : ''}`;
+  pendingCount = pending;
+  $('#avatar').innerHTML = `${esc(initials(me.full_name))}${pending || (promo && !promoSeen()) ? '<span class="badge"></span>' : ''}`;
   $('#menu').innerHTML = `
     <div class="who"><strong>${esc(me.full_name)}</strong><span>@${esc(me.username)}</span></div>
+    ${promoHtml()}
     <a href="/instellingen">Instellingen &amp; apparaten</a>
     ${me.is_admin ? `<a href="/instellingen#beheer">Gebruikers beheren ${pending ? `<span class="count">${pending}</span>` : ''}</a>` : ''}
     <div class="sep"></div>
@@ -833,6 +871,11 @@ async function renderMenu() {
     <div class="sep"></div>
     ${appVersion() ? `<button type="button" id="checkUpdate">App bijwerken <span class="label" style="font-size:13px">versie ${esc(appVersion())}</span></button>` : ''}
     <button type="button" id="logout" class="danger">Uitloggen</button>`;
+  $('#iosPromo')?.addEventListener('click', (e) => {
+    const steps = $('#iosSteps');
+    steps.hidden = !steps.hidden;
+    e.currentTarget.setAttribute('aria-expanded', String(!steps.hidden));
+  });
   $('#checkUpdate')?.addEventListener('click', () => {
     toggleMenu(false);
     try {
@@ -872,6 +915,12 @@ function toggleMenu(open) {
   }
   const menu = $('#menu');
   const show = open ?? menu.hidden;
+  if (show && promo && !promoSeen()) {
+    try {
+      localStorage.setItem('promoSeen', '1');
+    } catch {}
+    if (!pendingCount) $('#avatar .badge')?.remove();
+  }
   menu.hidden = !show;
   $('#avatar').setAttribute('aria-expanded', String(show));
 }
