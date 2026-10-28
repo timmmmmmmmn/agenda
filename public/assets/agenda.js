@@ -1,4 +1,4 @@
-import { api, esc, $, $$, icon, toast, showError, initials, calStyle, applyTheme, themePref } from './common.js';
+import { api, esc, $, $$, icon, toast, showError, initials, calStyle, applyTheme, themePref, isApp, haptic } from './common.js';
 
 const HOUR = 52;
 const MONTHS = ['januari', 'februari', 'maart', 'april', 'mei', 'juni', 'juli', 'augustus', 'september', 'oktober', 'november', 'december'];
@@ -197,6 +197,10 @@ function renderHeader() {
   $$('#viewSeg button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.view === state.view)));
   const w = $('#viewSeg button').offsetWidth || 76;
   $('#viewSeg .pill').style.transform = `translateX(${idx * (w + 2)}px)`;
+  if (isApp) {
+    $$('#appnavPill [data-nav]').forEach((b) => b.setAttribute('aria-current', String(b.dataset.nav === state.view)));
+    $('#appnavPill .appnav-ind').style.transform = `translateX(${idx * 100}%)`;
+  }
 }
 
 function renderMini() {
@@ -396,8 +400,16 @@ function renderMonth() {
   return `<div class="month"><div class="month-dows">${DOW.map((d) => `<span>${d}</span>`).join('')}</div><div class="month-grid">${cells}</div></div>`;
 }
 
+let slideDir = 0;
+
 function renderBoard() {
   const board = $('#board');
+  board.classList.remove('slide-next', 'slide-prev');
+  if (slideDir && state.animate) {
+    void board.offsetWidth;
+    board.classList.add(slideDir > 0 ? 'slide-next' : 'slide-prev');
+  }
+  if (state.animate) slideDir = 0;
   const prev = $('#scroller');
   const keepScroll = prev && !state.resetScroll ? prev.scrollTop : null;
   state.resetScroll = false;
@@ -427,6 +439,8 @@ function select(id) {
 // ---------- Navigatie ----------
 
 function go(dir) {
+  haptic();
+  slideDir = dir;
   state.cursor = shifted(state.view, state.cursor, dir);
   state.miniMonth = null;
   state.resetScroll = true;
@@ -691,6 +705,7 @@ async function save(e) {
       ? await api(`events/${editing.id}`, { method: 'PATCH', body })
       : await api('events', { method: 'POST', body });
     dlg.close();
+    haptic('confirm');
     toast(editing ? 'Afspraak bijgewerkt' : 'Afspraak toegevoegd');
     state.selected = null;
     state.pendingSelect = res.id;
@@ -716,6 +731,7 @@ async function remove(id, btn, key = null) {
     return;
   }
   if (dlg.open) dlg.close();
+  haptic('confirm');
   state.selected = null;
   state.events = state.events.filter((x) => !(String(x.id) === String(id) && (key == null || String(x.key) === String(key))));
   renderBoard();
@@ -766,6 +782,17 @@ async function runSearch() {
 
 function closeSearch() {
   $('#results').hidden = true;
+  if (isApp && document.documentElement.classList.contains('searching')) {
+    document.documentElement.classList.remove('searching');
+    $('#q').blur();
+  }
+}
+
+function openSearch() {
+  document.documentElement.classList.add('searching');
+  $('#q').value = '';
+  $('#results').hidden = true;
+  setTimeout(() => $('#q').focus(), 30);
 }
 
 // ---------- Accountmenu ----------
@@ -808,6 +835,13 @@ async function renderMenu() {
 }
 
 function toggleMenu(open) {
+  if (isApp) {
+    const more = $('#moreDlg');
+    const show = open ?? !more.open;
+    if (show && !more.open) more.showModal();
+    else if (!show && more.open) more.close();
+    return;
+  }
   const menu = $('#menu');
   const show = open ?? menu.hidden;
   menu.hidden = !show;
@@ -847,7 +881,7 @@ async function init() {
     toggleMenu();
   });
   document.addEventListener('click', (e) => {
-    if (!$('#menu').hidden && !e.target.closest('.menu-wrap')) toggleMenu(false);
+    if (!isApp && !$('#menu').hidden && !e.target.closest('.menu-wrap')) toggleMenu(false);
   });
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') toggleMenu(false);
@@ -886,7 +920,7 @@ async function init() {
     gotoDay(hit.dataset.date, state.view === 'month' ? 'month' : state.view);
   });
   document.addEventListener('click', (e) => {
-    if (!e.target.closest('.search-wrap')) closeSearch();
+    if (!e.target.closest('.search-wrap') && !e.target.closest('[data-nav="search"]')) closeSearch();
   });
 
   $('#mini').addEventListener('click', (e) => {
@@ -976,6 +1010,14 @@ async function init() {
 
   // Terugknop van de Android-app: eerst sluiten wat open staat.
   window.agendaBack = () => {
+    if (isApp && $('#moreDlg').open) {
+      $('#moreDlg').close();
+      return true;
+    }
+    if (isApp && document.documentElement.classList.contains('searching')) {
+      closeSearch();
+      return true;
+    }
     if (dlg.open) {
       dlg.close();
       return true;
@@ -991,8 +1033,65 @@ async function init() {
     return false;
   };
 
+  if (isApp) setupApp(newHere);
+
   state.resetScroll = true;
   await load({ animate: true, cals: true });
+}
+
+// ---------- Android-app ----------
+
+function setupApp(newHere) {
+  $$('#appnavPill [data-icon]').forEach((el) => { el.outerHTML = icon(el.dataset.icon); });
+  $('#appnavAdd').innerHTML = icon('plus');
+
+  // Accountmenu en agenda's verhuizen naar het "Meer"-paneel.
+  const more = $('#moreDlg');
+  const menu = $('#menu');
+  menu.hidden = false;
+  $('#moreBody').append(menu, $('#calList').closest('section'));
+  more.addEventListener('click', (e) => {
+    if (e.target === more) more.close();
+  });
+
+  $('#appnavPill').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-nav]');
+    if (!b) return;
+    haptic();
+    const nav = b.dataset.nav;
+    if (nav === 'search') {
+      if (document.documentElement.classList.contains('searching')) closeSearch();
+      else openSearch();
+    } else if (nav === 'more') {
+      closeSearch();
+      toggleMenu(true);
+    } else {
+      closeSearch();
+      setView(nav);
+    }
+  });
+  $('#appnavAdd').addEventListener('click', () => {
+    haptic();
+    closeSearch();
+    newHere();
+  });
+  $('#scrim').addEventListener('click', closeSearch);
+
+  // Vegen over het rooster: naar de vorige of volgende dag/week/maand.
+  let sx = 0, sy = 0, st = 0;
+  const board = $('#board');
+  board.addEventListener('touchstart', (e) => {
+    const t = e.touches[0];
+    sx = t.clientX;
+    sy = t.clientY;
+    st = Date.now();
+  }, { passive: true });
+  board.addEventListener('touchend', (e) => {
+    const t = e.changedTouches[0];
+    const dx = t.clientX - sx;
+    const dy = t.clientY - sy;
+    if (Date.now() - st < 600 && Math.abs(dx) > 70 && Math.abs(dx) > Math.abs(dy) * 1.8) go(dx < 0 ? 1 : -1);
+  }, { passive: true });
 }
 
 init();

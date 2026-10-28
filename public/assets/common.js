@@ -42,9 +42,36 @@ const PATHS = {
   phone: '<rect x="6" y="2" width="12" height="20" rx="3"/><path d="M11 18h2"/>',
   check: '<path d="M20 6L9 17l-5-5"/>',
   search: '<circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>',
+  day: '<rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/><rect x="10" y="13.5" width="4" height="4" rx="1"/>',
+  week: '<rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4M9.5 10v11M14.5 10v11"/>',
+  month: '<rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4M3 15.5h18M9 10v11M15 10v11"/>',
+  more: '<circle cx="5.5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="18.5" cy="12" r="1.6"/>',
   hourglass: '<path d="M6 2h12M6 22h12M7 2v4a5 5 0 005 5 5 5 0 005-5V2M7 22v-4a5 5 0 015-5 5 5 0 015 5v4"/>'
 };
 export const icon = (name, cls = 'icon') => `<svg class="${cls}" viewBox="0 0 24 24" aria-hidden="true">${PATHS[name] || ''}</svg>`;
+
+// ---------- Android-app ----------
+
+export const isApp = document.documentElement.classList.contains('app');
+
+// Korte trilling in de app ('tick' bij tikken, 'confirm' bij opslaan/verwijderen).
+export function haptic(kind = 'tick') {
+  try {
+    window.AgendaNative?.haptic(kind);
+  } catch {}
+}
+
+// Vervagende randen boven (statusbalk) en onder (navigatiebalk), in drie lagen voor een zachte overloop.
+if (isApp) {
+  const addEdges = () => {
+    if (document.querySelector('.edge')) return;
+    document.body.insertAdjacentHTML('beforeend',
+      '<div class="edge edge-top" aria-hidden="true"><i></i><i></i><i></i></div>' +
+      '<div class="edge edge-bottom" aria-hidden="true"><i></i><i></i><i></i></div>');
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', addEdges);
+  else addEdges();
+}
 
 // ---------- Thema ----------
 
@@ -62,6 +89,9 @@ export function applyTheme(pref) {
   } catch {}
   const dark = pref === 'donker' || (pref === 'systeem' && matchMedia('(prefers-color-scheme: dark)').matches);
   document.documentElement.setAttribute('data-theme', dark ? 'donker' : 'licht');
+  try {
+    window.AgendaNative?.setDark(dark);
+  } catch {}
   document.dispatchEvent(new CustomEvent('themechange'));
 }
 

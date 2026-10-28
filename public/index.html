@@ -58,6 +58,24 @@
 
 <button class="primary press fab" id="fab" type="button" aria-label="Nieuwe afspraak"></button>
 
+<!-- Alleen in de Android-app: zwevende navigatie onderin -->
+<nav class="appnav" aria-label="Navigatie">
+  <div class="appnav-pill" id="appnavPill">
+    <span class="appnav-ind" aria-hidden="true"></span>
+    <button type="button" data-nav="day"><span data-icon="day"></span><span>Dag</span></button>
+    <button type="button" data-nav="week"><span data-icon="week"></span><span>Week</span></button>
+    <button type="button" data-nav="month"><span data-icon="month"></span><span>Maand</span></button>
+    <button type="button" data-nav="search"><span data-icon="search"></span><span>Zoeken</span></button>
+    <button type="button" data-nav="more"><span data-icon="more"></span><span>Meer</span></button>
+  </div>
+  <button type="button" class="primary appnav-add" id="appnavAdd" aria-label="Nieuwe afspraak"></button>
+</nav>
+<div class="scrim" id="scrim" hidden></div>
+
+<dialog id="moreDlg" aria-label="Meer">
+  <div class="glass sheet" id="moreBody"></div>
+</dialog>
+
 <dialog id="dlg" aria-labelledby="dlgTitle">
   <form class="glass sheet" id="evForm" novalidate>
     <div class="sheet-head">
