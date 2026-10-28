@@ -869,7 +869,7 @@ async function init() {
   } catch {
     return location.replace('/login');
   }
-  $('#brandMark').innerHTML = icon('calendar');
+  $('#brandMark').innerHTML = '<img src="/icons/icon-192.png" alt="">';
   $('#prev').innerHTML = icon('left');
   $('#next').innerHTML = icon('right');
   $('#newBtn').innerHTML = `${icon('plus')} Nieuwe afspraak`;

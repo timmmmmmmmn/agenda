@@ -185,6 +185,8 @@ select.field option { color: #161B26; background: #fff; }
 .brand { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 16px; color: var(--text); text-decoration: none; }
 .brand-mark { width: 34px; height: 34px; border-radius: 10px; background: var(--accent); display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 8px rgba(47, 111, 237, .3); }
 .brand-mark .icon { stroke: #fff; }
+.brand-mark:has(img) { background: none; box-shadow: none; overflow: hidden; }
+.brand-mark img { width: 100%; height: 100%; display: block; }
 .strength { display: flex; gap: 6px; margin-top: 2px; }
 .strength span { flex: 1; height: 5px; border-radius: 3px; background: var(--chip); transition: background-color 200ms; }
 .success-mark { width: 60px; height: 60px; border-radius: 30px; background: var(--accent-soft); color: var(--accent-ink); display: flex; align-items: center; justify-content: center; }
