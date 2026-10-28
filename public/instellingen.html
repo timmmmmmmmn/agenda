@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Instellingen · Agenda</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/app.css">
+<script src="/assets/theme.js"></script>
+<script type="module" src="/assets/instellingen.js"></script>
+</head>
+<body>
+<div class="blobs" aria-hidden="true"><div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div></div>
+
+<div class="settings">
+  <header class="settings-head">
+    <a href="/" class="glass press btn round" id="back"></a>
+    <h1>Instellingen</h1>
+  </header>
+
+  <div class="cards">
+    <section class="glass card rise" aria-labelledby="h-theme">
+      <h2 id="h-theme">Weergave</h2>
+      <span class="sub">Kies licht, donker, of volg de instelling van je apparaat.</span>
+      <div class="segmented theme-seg" role="group" aria-label="Thema" id="themeSeg">
+        <span class="pill" aria-hidden="true"></span>
+        <button type="button" data-theme="systeem">Systeem</button>
+        <button type="button" data-theme="licht">Licht</button>
+        <button type="button" data-theme="donker">Donker</button>
+      </div>
+    </section>
+
+    <section class="glass card rise d1" aria-labelledby="h-profile">
+      <h2 id="h-profile">Profiel</h2>
+      <form id="profileForm" style="display:flex;flex-direction:column;gap:12px">
+        <div class="row"><div class="grow"><span class="small">Gebruikersnaam</span><span class="mono" id="username"></span></div></div>
+        <label class="form-label"><span>Volledige naam</span><input class="field" name="full_name" maxlength="100" autocomplete="name"></label>
+        <label class="form-label"><span>E-mailadres</span><input class="field" name="email" type="email" maxlength="200" autocomplete="email"></label>
+        <button class="btn press" type="submit">Opslaan</button>
+      </form>
+    </section>
+
+    <section class="glass card rise d2" aria-labelledby="h-pw">
+      <h2 id="h-pw">Wachtwoord wijzigen</h2>
+      <form id="pwForm" style="display:flex;flex-direction:column;gap:12px">
+        <label class="form-label"><span>Huidig wachtwoord</span><input class="field" name="current" type="password" autocomplete="current-password"></label>
+        <label class="form-label"><span>Nieuw wachtwoord</span><input class="field" name="password" type="password" autocomplete="new-password" minlength="10"></label>
+        <div class="strength" id="strength" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
+        <span class="hint" id="pwHint">Minimaal 10 tekens</span>
+        <button class="btn press" type="submit">Wachtwoord wijzigen</button>
+      </form>
+    </section>
+  </div>
+
+  <div class="cards">
+    <section class="glass card lift rise" aria-labelledby="h-apple">
+      <div class="card-head">
+        <div class="card-icon" id="iconApple"></div>
+        <div><h2 id="h-apple">MacBook · Apple Agenda</h2><span class="sub">Tweerichtingsverkeer via CalDAV</span></div>
+      </div>
+      <ol class="steps">
+        <li>Maak hiernaast een app-wachtwoord aan</li>
+        <li>Open Agenda › Instellingen › Accounts › +</li>
+        <li>Kies Ander agenda-account › CalDAV-account</li>
+        <li>Accounttype <strong>Handmatig</strong>, vul onderstaande gegevens in</li>
+      </ol>
+      <div class="row"><div class="grow"><span class="small">Serveradres</span><span class="mono" id="host"></span></div><button class="soft press sm" type="button" data-copy="host">Kopieer</button></div>
+      <div class="row"><div class="grow"><span class="small">Gebruikersnaam</span><span class="mono" id="davUser"></span></div><button class="soft press sm" type="button" data-copy="davUser">Kopieer</button></div>
+      <div class="row"><div class="grow"><span class="small">Wachtwoord</span><span>Een app-wachtwoord (niet je gewone wachtwoord)</span></div></div>
+    </section>
+
+    <section class="glass card lift rise d1" aria-labelledby="h-samsung">
+      <div class="card-head">
+        <div class="card-icon" id="iconPhone"></div>
+        <div><h2 id="h-samsung">Samsung · Samsung Agenda</h2><span class="sub">Via de gratis app DAVx⁵</span></div>
+      </div>
+      <ol class="steps">
+        <li>Installeer DAVx⁵ (Play Store of F-Droid)</li>
+        <li>Kies <strong>Inloggen met URL en gebruikersnaam</strong></li>
+        <li>Basis-URL, gebruikersnaam en een app-wachtwoord invullen</li>
+        <li>Vink je agenda's aan; ze verschijnen in Samsung Agenda</li>
+      </ol>
+      <div class="row"><div class="grow"><span class="small">Basis-URL</span><span class="mono" id="davUrl"></span></div><button class="soft press sm" type="button" data-copy="davUrl">Kopieer</button></div>
+      <div class="row"><div class="grow"><span class="small">Gebruikersnaam</span><span class="mono" id="davUser2"></span></div><button class="soft press sm" type="button" data-copy="davUser2">Kopieer</button></div>
+    </section>
+
+    <section class="glass card lift rise d2" aria-labelledby="h-ap">
+      <div><h2 id="h-ap">App-wachtwoorden</h2><span class="sub">Eén per apparaat, los in te trekken</span></div>
+      <form class="inline-form" id="apForm">
+        <label class="sr-only" for="apName">Naam van het apparaat</label>
+        <input class="field" id="apName" name="name" maxlength="60" placeholder="Bijv. MacBook" autocomplete="off">
+        <button class="primary press" type="submit" style="height:40px">Aanmaken</button>
+      </form>
+      <div id="apNew" hidden></div>
+      <div id="apList" style="display:flex;flex-direction:column;gap:8px"></div>
+    </section>
+  </div>
+
+  <section class="glass card rise" aria-labelledby="h-cals">
+    <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px">
+      <div><h2 id="h-cals">Agenda's en delen</h2><span class="sub">Deel een agenda met iemand die ook een account heeft. Die persoon ziet hem dan ook op de eigen apparaten.</span></div>
+      <form class="inline-form" id="newCalForm">
+        <label class="sr-only" for="newCalName">Naam nieuwe agenda</label>
+        <input class="field" id="newCalName" name="name" maxlength="60" placeholder="Nieuwe agenda" autocomplete="off">
+        <button class="primary press" type="submit" style="height:40px">Toevoegen</button>
+      </form>
+    </div>
+    <div id="calCards" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px"></div>
+    <div id="sharedWithMe"></div>
+  </section>
+
+  <section class="glass card rise" id="beheer" aria-labelledby="h-admin" hidden>
+    <div><h2 id="h-admin">Gebruikers beheren</h2><span class="sub">Nieuwe accounts kunnen pas inloggen nadat jij ze hebt goedgekeurd.</span></div>
+    <div id="adminNew" hidden></div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Naam</th><th>Gebruikersnaam</th><th>E-mail</th><th>Status</th><th>Acties</th></tr></thead>
+      <tbody id="userRows"></tbody>
+    </table></div>
+  </section>
+</div>
+</body>
+</html>

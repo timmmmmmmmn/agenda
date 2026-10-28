@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Inloggen · Agenda</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/app.css">
+<script src="/assets/theme.js"></script>
+<script type="module" src="/assets/login.js"></script>
+</head>
+<body>
+<div class="blobs" aria-hidden="true"><div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div></div>
+<div class="auth">
+  <header class="auth-top">
+    <span class="brand"><span class="brand-mark" id="brandMark"></span>Agenda</span>
+    <button class="glass press icon-btn round" id="themeBtn" type="button"></button>
+  </header>
+  <main class="auth-main">
+    <form class="glass auth-card rise" id="form" novalidate>
+      <div class="rise d1" style="display:flex;flex-direction:column;gap:6px">
+        <h1>Welkom terug</h1>
+        <p class="label">Log in om je agenda te bekijken.</p>
+      </div>
+      <div class="error-box" id="error" role="alert" hidden></div>
+      <label class="form-label rise d2">
+        <span>Gebruikersnaam of e-mail</span>
+        <input class="field" name="login" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" required>
+      </label>
+      <div class="form-label rise d2">
+        <span class="label-row"><label for="pw">Wachtwoord</label><a class="link" href="#" id="forgot" style="font-size:13px">Wachtwoord vergeten?</a></span>
+        <div class="pw-wrap">
+          <input class="field" id="pw" name="password" type="password" autocomplete="current-password" required>
+          <button type="button" class="pw-toggle press" id="pwToggle" aria-label="Wachtwoord tonen"></button>
+        </div>
+      </div>
+      <label class="check rise d3"><input type="checkbox" name="remember" checked> Ingelogd blijven</label>
+      <button class="primary press big rise d3" type="submit" id="submit">Inloggen</button>
+      <div class="auth-foot rise d4">Nog geen account? <a class="link" href="/registreren">Account aanmaken</a></div>
+    </form>
+  </main>
+  <footer class="auth-footer">agenda.timvanbergen.nl</footer>
+</div>
+</body>
+</html>

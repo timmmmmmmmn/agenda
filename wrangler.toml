@@ -1,0 +1,9 @@
+name = "agenda"
+compatibility_date = "2026-09-01"
+pages_build_output_dir = "public"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "agenda-db"
+database_id = "ada13df2-6ed1-4310-a0ad-b0e4fd9555fb"
+migrations_dir = "migrations"

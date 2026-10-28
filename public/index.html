@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Agenda</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/app.css">
+<script src="/assets/theme.js"></script>
+<script type="module" src="/assets/agenda.js"></script>
+</head>
+<body>
+<div class="blobs" aria-hidden="true"><div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div></div>
+
+<div class="shell">
+  <header class="topbar glass rise">
+    <a class="brand" href="/"><span class="brand-mark" id="brandMark"></span><span>Agenda</span></a>
+    <div class="nav-group">
+      <button class="btn press icon-btn" id="prev" type="button" aria-label="Vorige"></button>
+      <button class="btn press icon-btn" id="next" type="button" aria-label="Volgende"></button>
+      <button class="btn press" id="today" type="button">Vandaag</button>
+    </div>
+    <div class="title"><strong id="title"></strong><span id="subtitle"></span></div>
+    <div class="segmented" role="group" aria-label="Weergave" id="viewSeg">
+      <span class="pill" aria-hidden="true"></span>
+      <button type="button" data-view="day">Dag</button>
+      <button type="button" data-view="week">Week</button>
+      <button type="button" data-view="month">Maand</button>
+    </div>
+    <button class="primary press new-btn" id="newBtn" type="button"></button>
+    <button class="btn press icon-btn round" id="themeBtn" type="button"></button>
+    <div class="menu-wrap">
+      <button class="avatar press" id="avatar" type="button" aria-haspopup="true" aria-expanded="false" aria-label="Accountmenu"></button>
+      <div class="menu glass strong" id="menu" hidden></div>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <section class="glass panel rise d1" id="mini" aria-label="Maandoverzicht"></section>
+      <section class="glass panel rise d2" aria-label="Agenda's">
+        <span class="panel-title">Agenda's</span>
+        <div id="calList"></div>
+      </section>
+      <section class="glass strong panel rise d3 detail-panel" id="detail" aria-label="Geselecteerde afspraak"></section>
+      <div class="sync rise d4" id="sync"><span class="dot"></span><span id="syncText">Gesynchroniseerd</span></div>
+    </aside>
+    <main class="glass board rise d2" id="board"></main>
+  </div>
+</div>
+
+<button class="primary press fab" id="fab" type="button" aria-label="Nieuwe afspraak"></button>
+
+<dialog id="dlg" aria-labelledby="dlgTitle">
+  <form class="glass sheet" id="evForm" novalidate>
+    <div class="sheet-head">
+      <h2 id="dlgTitle">Nieuwe afspraak</h2>
+      <button type="button" class="btn press icon-btn round" id="dlgClose" aria-label="Sluiten"></button>
+    </div>
+    <div class="error-box" id="dlgError" role="alert" hidden></div>
+    <fieldset id="dlgFields" style="border:0;padding:0;margin:0;display:flex;flex-direction:column;gap:14px;min-width:0">
+      <label class="form-label"><span>Titel</span><input class="field" name="title" maxlength="200" placeholder="Bijv. Tandarts" autocomplete="off"></label>
+      <label class="check"><input type="checkbox" name="allDay"> Hele dag</label>
+      <div class="row2">
+        <label class="form-label"><span>Begint</span><input class="field" type="date" name="startDate" required></label>
+        <label class="form-label timed"><span>Om</span><input class="field" type="time" name="startTime" step="300"></label>
+      </div>
+      <div class="row2">
+        <label class="form-label"><span>Eindigt</span><input class="field" type="date" name="endDate" required></label>
+        <label class="form-label timed"><span>Tot</span><input class="field" type="time" name="endTime" step="300"></label>
+      </div>
+      <div class="row2">
+        <label class="form-label"><span>Agenda</span><select class="field" name="calendar"></select></label>
+        <label class="form-label"><span>Herhalen</span>
+          <select class="field" name="repeat">
+            <option value="none">Niet</option>
+            <option value="daily">Elke dag</option>
+            <option value="weekly">Elke week</option>
+            <option value="monthly">Elke maand</option>
+            <option value="yearly">Elk jaar</option>
+          </select>
+        </label>
+      </div>
+      <label class="form-label"><span>Locatie</span><input class="field" name="location" maxlength="300" placeholder="Adres of online" autocomplete="off"></label>
+      <label class="form-label"><span>Melding</span>
+        <select class="field" name="alarm">
+          <option value="">Geen</option>
+          <option value="0">Op het moment zelf</option>
+          <option value="5">5 minuten van tevoren</option>
+          <option value="15">15 minuten van tevoren</option>
+          <option value="30">30 minuten van tevoren</option>
+          <option value="60">1 uur van tevoren</option>
+          <option value="1440">1 dag van tevoren</option>
+        </select>
+      </label>
+      <label class="form-label"><span>Notities</span><textarea class="field" name="notes" maxlength="5000" rows="3"></textarea></label>
+    </fieldset>
+    <p class="note" id="recurNote" hidden>Dit is een herhalende afspraak. Wijzigingen gelden voor de hele reeks.</p>
+    <p class="note" id="roNote" hidden>Deze agenda is met je gedeeld om te bekijken; je kunt deze afspraak niet wijzigen.</p>
+    <div class="sheet-actions">
+      <button type="button" class="ghost press danger" id="dlgDelete" hidden>Verwijderen</button>
+      <span class="spacer"></span>
+      <button type="button" class="btn press" id="dlgCancel">Annuleren</button>
+      <button type="submit" class="primary press" id="dlgSave">Opslaan</button>
+    </div>
+  </form>
+</dialog>
+</body>
+</html>

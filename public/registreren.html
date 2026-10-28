@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Account aanmaken · Agenda</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/app.css">
+<script src="/assets/theme.js"></script>
+<script type="module" src="/assets/registreren.js"></script>
+</head>
+<body>
+<div class="blobs" aria-hidden="true"><div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div></div>
+<div class="auth">
+  <header class="auth-top">
+    <a class="glass press btn round" href="/login" id="back"></a>
+    <button class="glass press icon-btn round" id="themeBtn" type="button"></button>
+  </header>
+  <main class="auth-main">
+    <form class="glass auth-card rise" id="form" novalidate>
+      <div class="rise d1" style="display:flex;flex-direction:column;gap:6px">
+        <h1>Account aanmaken</h1>
+        <p class="label">Je krijgt je eigen agenda, die je ook op je Mac en telefoon kunt koppelen.</p>
+      </div>
+      <div class="error-box" id="error" role="alert" hidden></div>
+      <label class="form-label rise d2">
+        <span>Gebruikersnaam</span>
+        <input class="field" name="username" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="bijv. tim" maxlength="32" required>
+        <span class="hint" id="userHint">Kleine letters, cijfers, punt of streepje. Dit is ook je login op je Mac en telefoon.</span>
+      </label>
+      <label class="form-label rise d3">
+        <span>Volledige naam</span>
+        <input class="field" name="full_name" type="text" autocomplete="name" maxlength="100" required>
+      </label>
+      <label class="form-label rise d4">
+        <span>E-mailadres</span>
+        <input class="field" name="email" type="email" autocomplete="email" maxlength="200" required>
+      </label>
+      <div class="form-label rise d5">
+        <label for="pw" style="font-size:12px;font-weight:600;color:var(--muted)">Wachtwoord</label>
+        <div class="pw-wrap">
+          <input class="field" id="pw" name="password" type="password" autocomplete="new-password" required>
+          <button type="button" class="pw-toggle press" id="pwToggle" aria-label="Wachtwoord tonen"></button>
+        </div>
+        <div class="strength" id="strength" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
+        <span class="hint" id="pwHint">Minimaal 10 tekens</span>
+      </div>
+      <button class="primary press big rise d6" type="submit" id="submit" disabled>Account aanmaken</button>
+      <div class="auth-foot rise d6">Heb je al een account? <a class="link" href="/login">Inloggen</a></div>
+    </form>
+
+    <div class="glass auth-card" id="done" hidden style="align-items:center;text-align:center">
+      <div class="success-mark" id="doneMark"></div>
+      <h1>Account aangemaakt</h1>
+      <p class="label">Je account wacht nu op goedkeuring van de beheerder. Daarna kun je inloggen.</p>
+      <a class="btn press big" href="/login" style="width:100%">Naar inloggen</a>
+    </div>
+  </main>
+</div>
+</body>
+</html>
