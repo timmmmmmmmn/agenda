@@ -454,3 +454,32 @@ td .actions { display: flex; gap: 6px; flex-wrap: wrap; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* ---------- Bovenin: zonder vlakken, subtiele knoppen ---------- */
+
+.topbar .icon { width: 17px; height: 17px; stroke-width: 1.75; }
+.topbar .brand-mark { width: 30px; height: 30px; border-radius: 9px; box-shadow: none; }
+.topbar .brand-mark .icon { width: 16px; height: 16px; }
+
+.topbar .btn-group { background: transparent; border: 0; box-shadow: none; gap: 2px; overflow: visible; }
+.topbar .btn-group > button { height: 36px; border-radius: 10px; color: var(--text2); }
+.topbar .btn-group > button + button { border-left: 0; }
+.topbar .btn-group > button:hover { background: var(--hover); color: var(--text); }
+.topbar .btn-group > .icon-only { width: 36px; color: var(--muted); }
+
+.topbar .search { background: var(--chip); border-color: transparent; box-shadow: none; height: 36px; }
+.topbar .search:hover { background: var(--hover); }
+.topbar .search:focus-within { background: var(--surface); border-color: var(--accent); }
+.topbar .search .icon { width: 15px; height: 15px; }
+
+.topbar .segmented { background: transparent; border: 0; box-shadow: none; padding: 0; }
+.topbar .segmented button { height: 34px; color: var(--muted); }
+.topbar .segmented button:hover { color: var(--text); }
+.topbar .segmented button[aria-pressed="true"] { color: var(--text); }
+.topbar .segmented .pill { top: 0; left: 0; height: 34px; background: var(--chip); box-shadow: none; }
+
+.topbar .new-btn { height: 36px; padding: 0 12px; background: var(--accent-soft); color: var(--accent-ink); box-shadow: none; font-weight: 600; }
+.topbar .new-btn:hover { background: rgba(47, 111, 237, .18); }
+
+.topbar .avatar { width: 34px; height: 34px; border: 0; box-shadow: none; font-size: 13px; background: var(--accent-soft); color: var(--accent-ink); }
+.topbar .menu { top: 44px; }
