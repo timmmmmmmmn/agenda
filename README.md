@@ -1,6 +1,6 @@
 # Agenda · agenda.timvanbergen.nl
 
-Eigen agenda op Cloudflare Pages + D1, met een webinterface in Liquid Glass-stijl
+Eigen agenda op Cloudflare Workers (met statische bestanden) + D1, met een webinterface in Liquid Glass-stijl
 en een CalDAV-server, zodat afspraken synchroniseren met Apple Agenda (Mac/iPhone)
 en Samsung Agenda (via DAVx⁵).
 
@@ -13,12 +13,17 @@ public/                 de webinterface (gewone HTML/CSS/JS, geen build-stap)
   registreren.html      account aanmaken
   instellingen.html     profiel, apparaten koppelen, delen, gebruikersbeheer
   assets/               stijl en scripts
-functions/              serverkant (Cloudflare Pages Functions)
+src/worker.js           ingang: stuurt /api, /dav en de rest (public/) door
+functions/              serverkant
   api/[[path]].js       JSON-API voor de webinterface (/api/...)
-  dav/[[path]].js       CalDAV-server (/dav/...)
-  _lib/                 gedeelde code: iCalendar, opslag, hulpfuncties
+  _lib/                 CalDAV-server, iCalendar, opslag, hulpfuncties
 migrations/             databaseschema (D1)
-wrangler.toml           koppeling met de D1-database
+wrangler.toml           Worker-config en koppeling met de D1-database
+```
+
+Elke push naar `main` wordt door Cloudflare automatisch gedeployed (`npx wrangler deploy`).
+
+```
 ```
 
 ## Hoe het werkt
@@ -52,10 +57,10 @@ maken, wijzigen en verwijderen wel).
 
 ```sh
 npx wrangler d1 migrations apply agenda-db --local
-npx wrangler pages dev
+npx wrangler dev
 ```
 
-Open daarna http://localhost:8788.
+Open daarna http://localhost:8787.
 
 ## Database bijwerken
 
