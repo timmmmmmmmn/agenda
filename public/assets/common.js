@@ -1,3 +1,5 @@
+import './lens.js';
+
 // Gedeelde helpers voor alle pagina's.
 
 export async function api(path, { method = 'GET', body } = {}) {

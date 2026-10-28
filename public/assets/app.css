@@ -444,3 +444,28 @@ td .actions { display: flex; gap: 6px; flex-wrap: wrap; }
 
 /* Geen pop-animaties bij een stille verversing */
 .calm .ev, .calm .chip { animation: none; }
+
+/* ---------- Liquid Glass-lens (zie lens.js) ---------- */
+
+:where(.lens) { position: relative; }
+.lens::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: var(--lg-rim, none) 0 0 / 100% 100% no-repeat;
+  transition: opacity .6s;
+}
+:root[data-theme="donker"] .lens::after { opacity: .7; }
+.primary.lens::after { opacity: .85; }
+
+/* Chromium: echte lichtbreking van wat achter het glas ligt */
+.lens-live .glass.lens {
+  backdrop-filter: blur(14px) var(--lg-filter, saturate(1)) saturate(175%);
+  -webkit-backdrop-filter: blur(14px) var(--lg-filter, saturate(1)) saturate(175%);
+}
+.lens-live .btn.lens, .lens-live .icon-btn.lens, .lens-live .avatar.lens, .lens-live .search.lens {
+  backdrop-filter: blur(3px) var(--lg-filter, saturate(1)) saturate(150%);
+  -webkit-backdrop-filter: blur(3px) var(--lg-filter, saturate(1)) saturate(150%);
+}
