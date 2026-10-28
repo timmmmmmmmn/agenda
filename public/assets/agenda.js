@@ -974,6 +974,23 @@ async function init() {
     if (editing) editing.dirty = true;
   });
 
+  // Terugknop van de Android-app: eerst sluiten wat open staat.
+  window.agendaBack = () => {
+    if (dlg.open) {
+      dlg.close();
+      return true;
+    }
+    if (!$('#menu').hidden) {
+      toggleMenu(false);
+      return true;
+    }
+    if (!$('#results').hidden) {
+      closeSearch();
+      return true;
+    }
+    return false;
+  };
+
   state.resetScroll = true;
   await load({ animate: true, cals: true });
 }
