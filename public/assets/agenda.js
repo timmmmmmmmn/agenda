@@ -215,8 +215,8 @@ function renderDetail() {
     ${o.recurring ? `<div class="meta-row">${icon('repeat')}<span>Herhalende afspraak</span></div>` : ''}
     ${o.notes ? `<div class="notes">${esc(o.notes)}</div>` : ''}
     <div style="display:flex;gap:8px">
-      <button type="button" class="btn press" style="flex-grow:1" data-edit="${o.id}">${o.can_write ? 'Bewerken' : 'Bekijken'}</button>
-      ${o.can_write ? `<button type="button" class="btn press danger" style="flex-grow:1" data-del="${o.id}">Verwijderen</button>` : ''}
+      <button type="button" class="btn press" style="flex-grow:1" data-edit="${esc(occId(o))}">${o.can_write ? 'Bewerken' : 'Bekijken'}</button>
+      ${o.can_write ? `<button type="button" class="btn press danger" style="flex-grow:1" data-del="${esc(occId(o))}">${o.recurring ? 'Deze verwijderen' : 'Verwijderen'}</button>` : ''}
     </div>
   </div>`;
 }
@@ -456,6 +456,9 @@ function openNew(date, minutes, allDay = false) {
   $('#dlgSave').hidden = false;
   $('#dlgDelete').hidden = true;
   $('#recurNote').hidden = true;
+  $('#scopeSeg').hidden = true;
+  $('#repeatLabel').hidden = false;
+  form.calendar.disabled = false;
   $('#roNote').hidden = true;
   fillCalendarSelect(def.id);
   setRepeat('none');
@@ -471,46 +474,71 @@ function openNew(date, minutes, allDay = false) {
   openDialog();
 }
 
-async function openEdit(id) {
-  let ev;
-  try {
-    ev = await api(`events/${id}`);
-  } catch (err) {
-    return toast(err.message);
-  }
-  editing = { id: ev.id, readOnly: !ev.can_write };
-  form.reset();
-  $('#dlgTitle').textContent = ev.can_write ? 'Afspraak bewerken' : 'Afspraak';
-  $('#dlgFields').disabled = !ev.can_write;
-  $('#dlgSave').hidden = !ev.can_write;
-  $('#dlgDelete').hidden = !ev.can_write;
-  $('#recurNote').hidden = !(ev.repeat !== 'none' && ev.can_write);
-  $('#roNote').hidden = ev.can_write;
-  fillCalendarSelect(ev.calendar_id, true);
-  form.title.value = ev.title;
-  form.location.value = ev.location;
-  form.notes.value = ev.notes;
-  setRepeat(ev.repeat);
-  setAlarm(ev.alarm);
-  if (ev.allDay) {
-    const s = parseYmd(ev.start);
-    const e = addDays(parseYmd(ev.end), -1);
+function fillFields(src) {
+  form.title.value = src.title;
+  form.location.value = src.location;
+  form.notes.value = src.notes;
+  setAlarm(src.alarm);
+  if (src.allDay) {
+    const s = parseYmd(src.start);
+    const e = addDays(parseYmd(src.end), -1);
     form.startDate.value = ymd(s);
     form.endDate.value = ymd(e < s ? s : e);
     form.startTime.value = '09:00';
     form.endTime.value = '10:00';
     lastStart = s;
   } else {
-    const s = new Date(ev.start);
-    const e = new Date(ev.end);
+    const s = new Date(src.start);
+    const e = new Date(src.end);
     form.startDate.value = ymd(s);
     form.startTime.value = hm2(s);
     form.endDate.value = ymd(e);
     form.endTime.value = hm2(e);
     lastStart = s;
   }
-  setAllDay(ev.allDay);
+  setAllDay(src.allDay);
+}
+
+// Bij een herhaling: alleen dit voorkomen, of de hele reeks.
+function setScope(scope) {
+  editing.scope = scope;
+  const seg = $('#scopeSeg');
+  const btns = $$('button', seg);
+  btns.forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.scope === scope)));
+  seg.querySelector('.pill').style.transform = `translateX(${scope === 'all' ? (btns[0].offsetWidth || 120) + 2 : 0}px)`;
+  const ev = editing.ev;
+  fillFields(scope === 'this' ? ev.occurrence : ev);
+  $('#repeatLabel').hidden = scope === 'this';
+  form.calendar.disabled = scope === 'this';
+  $('#recurNote').textContent = scope === 'this'
+    ? 'Je wijzigt alleen deze ene afspraak; de rest van de reeks blijft zoals hij is.'
+    : 'Wijzigingen gelden voor de hele reeks.';
+  $('#dlgDelete').textContent = scope === 'this' ? 'Deze verwijderen' : 'Reeks verwijderen';
+  delete $('#dlgDelete').dataset.confirm;
+}
+
+async function openEdit(id, key) {
+  let ev;
+  try {
+    ev = await api(`events/${id}${key ? `?occurrence=${encodeURIComponent(key)}` : ''}`);
+  } catch (err) {
+    return toast(err.message);
+  }
+  editing = { id: ev.id, readOnly: !ev.can_write, ev, scope: 'all' };
+  form.reset();
+  $('#dlgTitle').textContent = ev.can_write ? 'Afspraak bewerken' : 'Afspraak';
+  $('#dlgFields').disabled = !ev.can_write;
+  $('#dlgSave').hidden = !ev.can_write;
+  $('#dlgDelete').hidden = !ev.can_write;
+  const recurring = !!ev.occurrence && ev.can_write;
+  $('#recurNote').hidden = !recurring;
+  $('#scopeSeg').hidden = !recurring;
+  $('#roNote').hidden = ev.can_write;
+  fillCalendarSelect(ev.calendar_id, true);
+  setRepeat(ev.repeat);
   openDialog();
+  if (recurring) setScope('this');
+  else fillFields(ev.occurrence || ev);
 }
 
 function formStart() {
@@ -558,6 +586,12 @@ async function save(e) {
     repeat: form.repeat.value,
     alarm: form.alarm.value === '' ? 'none' : Number(form.alarm.value)
   };
+  if (editing?.scope === 'this') {
+    body.scope = 'this';
+    body.occurrence = editing.ev.occurrence.key;
+    delete body.repeat;
+    delete body.calendar_id;
+  }
   const btn = $('#dlgSave');
   btn.disabled = true;
   try {
@@ -577,27 +611,67 @@ async function save(e) {
   }
 }
 
-async function remove(id, btn) {
+async function remove(id, btn, key = null) {
   if (!btn.dataset.confirm) {
+    const label = btn.textContent;
     btn.dataset.confirm = '1';
     btn.textContent = 'Zeker weten?';
     setTimeout(() => {
-      if (btn.isConnected) {
+      if (btn.isConnected && btn.dataset.confirm) {
         delete btn.dataset.confirm;
-        btn.textContent = 'Verwijderen';
+        btn.textContent = label;
       }
     }, 4000);
     return;
   }
   try {
-    await api(`events/${id}`, { method: 'DELETE' });
+    await api(`events/${id}${key != null ? `?occurrence=${encodeURIComponent(key)}` : ''}`, { method: 'DELETE' });
     if (dlg.open) dlg.close();
     state.selected = null;
-    toast('Afspraak verwijderd');
+    toast(key != null ? 'Deze afspraak is uit de reeks gehaald' : 'Afspraak verwijderd');
     load();
   } catch (err) {
     toast(err.message);
   }
+}
+
+// ---------- Zoeken ----------
+
+let searchTimer;
+let searchSeq = 0;
+
+function whenLabel(r) {
+  const s = r.allDay ? parseYmd(r.start) : new Date(r.start);
+  const date = `${DAYS[s.getDay()].slice(0, 2)} ${s.getDate()} ${MONTHS_SHORT[s.getMonth()]} ${s.getFullYear() !== new Date().getFullYear() ? s.getFullYear() : ''}`.trim();
+  return `${date}${r.allDay ? '' : `, ${hm(s)}`}${r.recurring ? ' · herhaalt' : ''}${r.location ? ` · ${r.location}` : ''}`;
+}
+
+async function runSearch() {
+  const q = $('#q').value.trim();
+  const box = $('#results');
+  if (q.length < 2) {
+    box.hidden = true;
+    return;
+  }
+  const seq = ++searchSeq;
+  let res;
+  try {
+    res = await api(`search?q=${encodeURIComponent(q)}`);
+  } catch (err) {
+    res = [];
+  }
+  if (seq !== searchSeq) return;
+  box.innerHTML = res.length ? res.map((r) => {
+    const c = calById(r.calendar_id);
+    return `<button type="button" class="result" role="option" data-hit="${r.id}|${r.key}" data-date="${esc((r.allDay ? r.start : ymd(new Date(r.start))))}">
+      <span class="dot" style="background:${esc(c?.color || '#5B6478')}"></span>
+      <span><strong>${esc(r.title || '(geen titel)')}</strong><span class="when">${esc(whenLabel(r))}</span></span></button>`;
+  }).join('') : '<p class="empty">Niets gevonden</p>';
+  box.hidden = false;
+}
+
+function closeSearch() {
+  $('#results').hidden = true;
 }
 
 // ---------- Accountmenu ----------
@@ -672,6 +746,42 @@ async function init() {
     if (e.key === 'Escape') toggleMenu(false);
   });
 
+  $('#searchIcon').innerHTML = icon('search');
+  $('#q').addEventListener('input', () => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(runSearch, 250);
+  });
+  $('#q').addEventListener('focus', () => {
+    if ($('#q').value.trim().length >= 2) runSearch();
+  });
+  $('#q').addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      $('#q').value = '';
+      closeSearch();
+    }
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      $('#results .result')?.focus();
+    }
+  });
+  $('#results').addEventListener('keydown', (e) => {
+    const items = $$('#results .result');
+    const i = items.indexOf(document.activeElement);
+    if (e.key === 'ArrowDown') { e.preventDefault(); items[Math.min(i + 1, items.length - 1)]?.focus(); }
+    if (e.key === 'ArrowUp') { e.preventDefault(); (i <= 0 ? $('#q') : items[i - 1]).focus(); }
+    if (e.key === 'Escape') { closeSearch(); $('#q').focus(); }
+  });
+  $('#results').addEventListener('click', (e) => {
+    const hit = e.target.closest('[data-hit]');
+    if (!hit) return;
+    closeSearch();
+    state.selected = hit.dataset.hit;
+    gotoDay(hit.dataset.date, state.view === 'month' ? 'month' : state.view);
+  });
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.search-wrap')) closeSearch();
+  });
+
   $('#mini').addEventListener('click', (e) => {
     const nav = e.target.closest('[data-mini]');
     if (nav) {
@@ -694,9 +804,13 @@ async function init() {
 
   $('#detail').addEventListener('click', (e) => {
     const ed = e.target.closest('[data-edit]');
-    if (ed) return openEdit(ed.dataset.edit);
+    if (ed) return openEdit(...ed.dataset.edit.split('|'));
     const del = e.target.closest('[data-del]');
-    if (del) remove(del.dataset.del, del);
+    if (del) {
+      const [id, key] = del.dataset.del.split('|');
+      const o = state.events.find((x) => occId(x) === del.dataset.del);
+      remove(id, del, o?.recurring ? Number(key) : null);
+    }
   });
 
   const board = $('#board');
@@ -704,7 +818,7 @@ async function init() {
     const occ = e.target.closest('[data-occ]');
     if (occ) {
       select(occ.dataset.occ);
-      if (narrow.matches) openEdit(occ.dataset.occ.split('|')[0]);
+      if (narrow.matches) openEdit(...occ.dataset.occ.split('|'));
       return;
     }
     const day = e.target.closest('[data-day]');
@@ -721,7 +835,7 @@ async function init() {
   });
   board.addEventListener('dblclick', (e) => {
     const occ = e.target.closest('[data-occ]');
-    if (occ && !narrow.matches) openEdit(occ.dataset.occ.split('|')[0]);
+    if (occ && !narrow.matches) openEdit(...occ.dataset.occ.split('|'));
   });
 
   form.addEventListener('submit', save);
@@ -730,7 +844,11 @@ async function init() {
   form.startTime.addEventListener('change', shiftEnd);
   $('#dlgCancel').addEventListener('click', () => dlg.close());
   $('#dlgClose').addEventListener('click', () => dlg.close());
-  $('#dlgDelete').addEventListener('click', (e) => editing && remove(editing.id, e.currentTarget));
+  $('#dlgDelete').addEventListener('click', (e) => {
+    if (!editing) return;
+    remove(editing.id, e.currentTarget, editing.scope === 'this' ? editing.ev.occurrence.key : null);
+  });
+  $$('#scopeSeg button').forEach((b) => b.addEventListener('click', () => setScope(b.dataset.scope)));
   dlg.addEventListener('click', (e) => {
     if (e.target === dlg) dlg.close();
   });

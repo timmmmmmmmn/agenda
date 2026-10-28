@@ -5,7 +5,7 @@ import {
   clearSessionCookie, sessionUser, tooManyAttempts, recordAttempt, clientIp, newAppPassword,
   normalizeAppPassword, sha256hex, randomToken
 } from '../_lib/util.js';
-import { occurrences, details, buildEvent, patchEvent } from '../_lib/ical.js';
+import { occurrences, details, buildEvent, patchEvent, excludeOccurrence, overrideOccurrence } from '../_lib/ical.js';
 import {
   visibleCalendars, requireCalendar, createCalendar, putEvent, deleteEvent
 } from '../_lib/store.js';
@@ -252,9 +252,17 @@ function eventFields(b) {
   };
 }
 
-async function getEventDetails(env, user, id) {
+function occurrenceKey(v) {
+  if (v === undefined || v === null || v === '') return null;
+  const n = Number(v);
+  if (!Number.isFinite(n)) throw new HttpError(400, 'Ongeldig voorkomen');
+  return n;
+}
+
+async function getEventDetails(env, user, id, url) {
   const { row, cal } = await loadEvent(env, user, id, false);
-  return json({ id: row.id, calendar_id: row.calendar_id, can_write: !!cal.can_write, ...details(row.ics) });
+  const key = occurrenceKey(url.searchParams.get('occurrence'));
+  return json({ id: row.id, calendar_id: row.calendar_id, can_write: !!cal.can_write, ...details(row.ics, key) });
 }
 
 async function createEventApi(env, user, request) {
@@ -269,6 +277,12 @@ async function createEventApi(env, user, request) {
 async function updateEventApi(env, user, id, request) {
   const { row } = await loadEvent(env, user, id, true);
   const b = await body(request);
+  if (b.scope === 'this') {
+    // Alleen dit ene voorkomen aanpassen: blijft in dezelfde agenda.
+    const ics = overrideOccurrence(row.ics, occurrenceKey(b.occurrence), eventFields(b));
+    const res = await putEvent(env, row.calendar_id, row.href, ics);
+    return json({ id: res.id });
+  }
   const ics = patchEvent(row.ics, eventFields(b));
   const target = b.calendar_id && b.calendar_id !== row.calendar_id ? b.calendar_id : row.calendar_id;
   if (target !== row.calendar_id) {
@@ -279,10 +293,48 @@ async function updateEventApi(env, user, id, request) {
   return json({ id: res.id });
 }
 
-async function deleteEventApi(env, user, id) {
+async function deleteEventApi(env, user, id, url) {
   const { row } = await loadEvent(env, user, id, true);
+  const key = occurrenceKey(url.searchParams.get('occurrence'));
+  if (key != null) {
+    await putEvent(env, row.calendar_id, row.href, excludeOccurrence(row.ics, key));
+    return json({ ok: true });
+  }
   await deleteEvent(env, row.calendar_id, row.href);
   return json({ ok: true });
+}
+
+async function searchEvents(env, user, url) {
+  const q = str(url.searchParams.get('q'), 100);
+  if (q.length < 2) return json([]);
+  const cals = await visibleCalendars(env, user.id);
+  if (!cals.length) return json([]);
+  const like = `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+  const { results } = await env.DB.prepare(
+    `SELECT id, calendar_id, ics FROM events
+      WHERE calendar_id IN (${cals.map(() => '?').join(',')})
+        AND (summary LIKE ? ESCAPE '\\' OR ics LIKE ? ESCAPE '\\')
+      ORDER BY first_start DESC LIMIT 60`
+  ).bind(...cals.map((c) => c.id), like, like).all();
+  const now = Date.now();
+  const needle = q.toLowerCase();
+  const out = [];
+  for (const row of results) {
+    const occ = occurrences(row.ics, now - 400 * DAY, now + 800 * DAY);
+    const hit = (o) => [o.title, o.location, o.notes].some((t) => (t || '').toLowerCase().includes(needle));
+    const matches = occ.filter(hit);
+    let o = matches.find((x) => Date.parse(x.end) >= now || x.end >= new Date(now).toISOString().slice(0, 10)) || matches[matches.length - 1];
+    if (!o) {
+      const d = details(row.ics);
+      if (!d || !hit(d)) continue;
+      o = { ...d, key: Date.parse(d.start), recurring: d.repeat !== 'none' };
+    }
+    out.push({ id: row.id, calendar_id: row.calendar_id, key: o.key, title: o.title, location: o.location, start: o.start, end: o.end, allDay: o.allDay, recurring: !!o.recurring });
+  }
+  const iso = new Date(now).toISOString();
+  const upcoming = out.filter((o) => o.end >= iso.slice(0, o.allDay ? 10 : 24)).sort((a, b) => (a.start < b.start ? -1 : 1));
+  const past = out.filter((o) => !upcoming.includes(o)).sort((a, b) => (a.start > b.start ? -1 : 1));
+  return json([...upcoming, ...past].slice(0, 25));
 }
 
 // ---------- Beheer ----------
@@ -370,12 +422,14 @@ async function route(request, env) {
     if (b && c === 'shares' && d && m === 'DELETE') return removeShare(env, user, b, d);
   }
 
+  if (p === 'search' && m === 'GET') return searchEvents(env, user, url);
+
   if (a === 'events') {
     if (!b && m === 'GET') return listEvents(env, user, url);
     if (!b && m === 'POST') return createEventApi(env, user, request);
-    if (b && m === 'GET') return getEventDetails(env, user, b);
+    if (b && m === 'GET') return getEventDetails(env, user, b, url);
     if (b && m === 'PATCH') return updateEventApi(env, user, b, request);
-    if (b && m === 'DELETE') return deleteEventApi(env, user, b);
+    if (b && m === 'DELETE') return deleteEventApi(env, user, b, url);
   }
 
   if (a === 'admin') {

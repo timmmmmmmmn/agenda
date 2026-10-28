@@ -450,7 +450,21 @@ export function summarize(text) {
 }
 
 // Details van het hoofd-event, voor het bewerkvenster.
-export function details(text) {
+function fieldsOf(ev, startMs, durMs) {
+  return {
+    title: ev.title,
+    location: ev.location,
+    notes: ev.notes,
+    allDay: ev.allDay,
+    start: ev.allDay ? dateStr(Math.floor(startMs / DAY)) : new Date(startMs).toISOString(),
+    end: ev.allDay ? dateStr(Math.floor((startMs + durMs) / DAY)) : new Date(startMs + durMs).toISOString(),
+    alarm: ev.alarmMin
+  };
+}
+
+// Details van het hoofd-event, voor het bewerkvenster. Met `key` (start van één
+// voorkomen) komt er ook `occurrence` bij: dat ene voorkomen, met eventuele eigen wijzigingen.
+export function details(text, key = null) {
   const parsed = readEvents(text);
   if (!parsed) return null;
   const m = parsed.master;
@@ -459,16 +473,12 @@ export function details(text) {
     const simple = m.rrule.interval === 1 && !m.rrule.count && !m.rrule.until && !m.rrule.byday && !m.rrule.bymonthday && !m.rrule.bymonth;
     repeat = simple ? m.rrule.freq.toLowerCase() : 'custom';
   }
-  return {
-    title: m.title,
-    location: m.location,
-    notes: m.notes,
-    allDay: m.allDay,
-    start: m.allDay ? dateStr(m.start.dn) : new Date(m.startMs).toISOString(),
-    end: m.allDay ? dateStr(Math.floor((m.startMs + m.durMs) / DAY)) : new Date(m.startMs + m.durMs).toISOString(),
-    repeat,
-    alarm: m.alarmMin
-  };
+  const out = { ...fieldsOf(m, m.startMs, m.durMs), repeat };
+  if (key != null && m.rrule) {
+    const ov = parsed.overrides.find((o) => o.recurrenceId === key);
+    out.occurrence = ov ? { ...fieldsOf(ov, ov.startMs, ov.durMs), key } : { ...fieldsOf(m, key, m.durMs), key };
+  }
+  return out;
 }
 
 // ---------- Afspraken schrijven ----------
@@ -568,5 +578,50 @@ export function patchEvent(text, f) {
   applyFields(cal, ev, f);
   const seq = parseInt(getProp(ev, 'SEQUENCE')?.value || '0', 10);
   setProp(ev, 'SEQUENCE', {}, String(seq + 1));
+  return serialize(cal);
+}
+
+// ---------- Eén voorkomen van een herhaling ----------
+
+// RECURRENCE-ID/EXDATE in hetzelfde formaat als de DTSTART van de reeks.
+function likeDtstart(master, key) {
+  const p = getProp(master.comp, 'DTSTART');
+  if (master.allDay) return { params: { VALUE: 'DATE' }, value: dateStr(Math.floor(key / DAY)).replace(/-/g, '') };
+  if (master.start.tz === 'UTC') return { params: {}, value: utcStamp(key) };
+  const local = key + tzOffset(key, master.start.tz);
+  return { params: p.params.TZID ? { TZID: p.params.TZID } : {}, value: utcStamp(local).replace('Z', '') };
+}
+
+export function excludeOccurrence(text, key) {
+  const parsed = readEvents(text);
+  if (!parsed?.master.rrule) throw new Error('Geen herhalende afspraak');
+  const { cal, master, overrides } = parsed;
+  const drop = new Set(overrides.filter((o) => o.recurrenceId === key).map((o) => o.comp));
+  cal.children = cal.children.filter((c) => !drop.has(c));
+  const ex = likeDtstart(master, key);
+  master.comp.props.push({ name: 'EXDATE', params: ex.params, value: ex.value, raw: null });
+  setProp(master.comp, 'LAST-MODIFIED', {}, utcStamp());
+  return serialize(cal);
+}
+
+export function overrideOccurrence(text, key, f) {
+  const parsed = readEvents(text);
+  if (!parsed?.master.rrule) throw new Error('Geen herhalende afspraak');
+  const { cal, master, overrides } = parsed;
+  let comp = overrides.find((o) => o.recurrenceId === key)?.comp;
+  if (!comp) {
+    const skip = ['RRULE', 'RDATE', 'EXDATE', 'DTSTART', 'DTEND', 'DURATION', 'RECURRENCE-ID'];
+    comp = {
+      name: 'VEVENT',
+      props: master.comp.props.filter((p) => !skip.includes(p.name)).map((p) => ({ ...p })),
+      children: master.comp.children.map((c) => ({ ...c, props: c.props.map((p) => ({ ...p })) }))
+    };
+    const rid = likeDtstart(master, key);
+    comp.props.push({ name: 'RECURRENCE-ID', params: rid.params, value: rid.value, raw: null });
+    cal.children.splice(cal.children.indexOf(master.comp) + 1, 0, comp);
+  }
+  applyFields(cal, comp, { ...f, repeat: undefined });
+  const seq = parseInt(getProp(comp, 'SEQUENCE')?.value || '0', 10);
+  setProp(comp, 'SEQUENCE', {}, String(seq + 1));
   return serialize(cal);
 }

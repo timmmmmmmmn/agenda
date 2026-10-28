@@ -24,6 +24,12 @@
       <button class="btn press" id="today" type="button">Vandaag</button>
     </div>
     <div class="title"><strong id="title"></strong><span id="subtitle"></span></div>
+    <div class="search-wrap">
+      <label class="search"><span id="searchIcon"></span><span class="sr-only">Zoeken</span>
+        <input type="search" id="q" placeholder="Zoeken" autocomplete="off" aria-controls="results">
+      </label>
+      <div class="results glass strong" id="results" role="listbox" hidden></div>
+    </div>
     <div class="segmented" role="group" aria-label="Weergave" id="viewSeg">
       <span class="pill" aria-hidden="true"></span>
       <button type="button" data-view="day">Dag</button>
@@ -61,6 +67,11 @@
       <button type="button" class="btn press icon-btn round" id="dlgClose" aria-label="Sluiten"></button>
     </div>
     <div class="error-box" id="dlgError" role="alert" hidden></div>
+    <div class="segmented scope-seg" role="group" aria-label="Wat wil je wijzigen?" id="scopeSeg" hidden>
+      <span class="pill" aria-hidden="true"></span>
+      <button type="button" data-scope="this">Alleen deze</button>
+      <button type="button" data-scope="all">Hele reeks</button>
+    </div>
     <fieldset id="dlgFields" style="border:0;padding:0;margin:0;display:flex;flex-direction:column;gap:14px;min-width:0">
       <label class="form-label"><span>Titel</span><input class="field" name="title" maxlength="200" placeholder="Bijv. Tandarts" autocomplete="off"></label>
       <label class="check"><input type="checkbox" name="allDay"> Hele dag</label>
@@ -73,8 +84,8 @@
         <label class="form-label timed"><span>Tot</span><input class="field" type="time" name="endTime" step="300"></label>
       </div>
       <div class="row2">
-        <label class="form-label"><span>Agenda</span><select class="field" name="calendar"></select></label>
-        <label class="form-label"><span>Herhalen</span>
+        <label class="form-label" id="calLabel"><span>Agenda</span><select class="field" name="calendar"></select></label>
+        <label class="form-label" id="repeatLabel"><span>Herhalen</span>
           <select class="field" name="repeat">
             <option value="none">Niet</option>
             <option value="daily">Elke dag</option>
@@ -98,7 +109,7 @@
       </label>
       <label class="form-label"><span>Notities</span><textarea class="field" name="notes" maxlength="5000" rows="3"></textarea></label>
     </fieldset>
-    <p class="note" id="recurNote" hidden>Dit is een herhalende afspraak. Wijzigingen gelden voor de hele reeks.</p>
+    <p class="note" id="recurNote" hidden></p>
     <p class="note" id="roNote" hidden>Deze agenda is met je gedeeld om te bekijken; je kunt deze afspraak niet wijzigen.</p>
     <div class="sheet-actions">
       <button type="button" class="ghost press danger" id="dlgDelete" hidden>Verwijderen</button>

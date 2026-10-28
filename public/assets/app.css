@@ -392,7 +392,22 @@ td .actions { display: flex; gap: 6px; flex-wrap: wrap; }
 .status.pending { background: rgba(224, 138, 46, .18); color: var(--warn); }
 .status.active { background: rgba(31, 157, 97, .15); color: var(--ok); }
 .theme-seg button { width: 92px; }
+.scope-seg { align-self: flex-start; }
+.scope-seg button, .scope-seg .pill { width: 120px; }
 .theme-seg .pill { width: 92px; }
+
+.search-wrap { position: relative; }
+.search { display: flex; align-items: center; gap: 8px; width: 200px; height: 44px; padding: 0 14px; border-radius: 14px; background: var(--field); border: 1px solid var(--stroke); color: var(--muted); transition: border-color .25s, box-shadow .25s, width .5s var(--spring); }
+.search:focus-within { border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); width: 260px; }
+.search input { border: 0; outline: 0; background: transparent; font-size: 14px; color: var(--text); width: 100%; min-width: 0; }
+.search .icon { width: 16px; height: 16px; }
+.results { background-color: var(--sticky) !important; position: absolute; right: 0; top: 52px; width: 360px; max-height: 440px; overflow-y: auto; padding: 6px; border-radius: 20px; z-index: 60; display: flex; flex-direction: column; gap: 2px; animation: menuIn .35s var(--spring) both; transform-origin: top right; }
+.result { display: flex; gap: 10px; align-items: flex-start; width: 100%; padding: 10px 12px; border: 0; border-radius: 12px; background: transparent; color: var(--text); text-align: left; }
+.result:hover, .result:focus-visible { background: var(--chip); outline: none; }
+.result .dot { margin-top: 5px; }
+.result strong { display: block; font-size: 14px; font-weight: 600; }
+.result .when { display: block; font-size: 12px; color: var(--muted); margin-top: 2px; }
+.results .empty { padding: 12px; margin: 0; }
 
 /* ---------- Responsief ---------- */
 
@@ -401,7 +416,10 @@ td .actions { display: flex; gap: 6px; flex-wrap: wrap; }
   .sidebar { max-width: none; order: 2; }
   .board { height: calc(100dvh - 210px); }
   .topbar { padding: 10px; border-radius: 22px; }
-  .topbar .search, .topbar .new-btn { display: none; }
+  .topbar .new-btn { display: none; }
+  .search-wrap { order: 11; flex-basis: 100%; }
+  .search, .search:focus-within { width: 100%; }
+  .results { left: 0; width: 100%; }
   .fab { display: inline-flex; }
   .segmented button, .segmented .pill { width: 64px; }
   .detail-panel { display: none; }
