@@ -488,7 +488,7 @@ async function put(env, request, user, path) {
   const ifNoneMatch = request.headers.get('if-none-match');
   if (ifNoneMatch && existing && etagMatches(ifNoneMatch, existing.etag)) return plain(412);
   if (ifMatch && (!existing || !etagMatches(ifMatch, existing.etag))) return plain(412);
-  const { etag } = await putEvent(env, cal.id, path.name, text);
+  const { etag } = await putEvent(env, cal.id, path.name, text, user.id);
   return plain(existing ? 204 : 201, null, { etag });
 }
 
@@ -501,7 +501,7 @@ async function del(env, request, user, path) {
     if (!ev) return plain(404);
     const ifMatch = request.headers.get('if-match');
     if (ifMatch && !etagMatches(ifMatch, ev.etag)) return plain(412);
-    await deleteEvent(env, cal.id, path.name);
+    await deleteEvent(env, cal.id, path.name, user.id);
     return plain(204);
   }
   if (path.kind === 'calendar') {

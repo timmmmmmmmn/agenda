@@ -415,7 +415,8 @@ export function occurrences(text, fromMs, toMs) {
       location: ev.location,
       notes: ev.notes,
       recurring: !!master.rrule,
-      override: isOverride
+      override: isOverride,
+      alarm: ev.alarmMin
     });
   };
   for (const o of expandMaster(master, fromMs, toMs)) {

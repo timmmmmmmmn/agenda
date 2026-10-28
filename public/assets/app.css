@@ -315,6 +315,19 @@ select.field option { color: #161B26; background: #fff; }
 .chip.sel { box-shadow: inset 3px 0 0 var(--c), 0 0 0 2px var(--c); }
 .chip .tm { font-weight: 500; opacity: .8; margin-right: 4px; }
 
+/* Weekbalk in de dagweergave */
+.week-strip { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px; padding: 8px 8px 4px; }
+.sd { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 4px 0 2px; border: 0; border-radius: 14px; background: transparent; color: var(--text); }
+.sd .dw { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: lowercase; }
+.sd .dn { width: 36px; height: 36px; border-radius: 18px; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 600; transition: background-color 160ms, color 160ms, transform 90ms ease-out; }
+.sd:hover .dn { background: var(--hover); }
+.sd.today .dn { color: var(--accent-ink); box-shadow: inset 0 0 0 1.5px var(--accent); }
+.sd.on .dn { background: var(--accent); color: #fff; box-shadow: none; }
+.sd:active .dn { transform: scale(.9); }
+.sd .dot { width: 5px; height: 5px; border-radius: 3px; background: var(--muted); opacity: .55; }
+.sd.on .dot { background: var(--accent); opacity: 1; }
+.sd .dot.none { visibility: hidden; }
+
 /* Afspraken komen alleen kort op bij het wisselen van week/weergave. */
 .board:not(.calm) .ev, .board:not(.calm) .chip { animation: fadeIn 160ms ease-out both; }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
@@ -542,6 +555,7 @@ html.app #moreBody .cal-row { min-height: 44px; font-size: 15px; }
   .ev:hover, .chip:hover { filter: none; }
   .mcell:hover, .cal-row:hover, .mini-grid button:hover, .btn-group > button:hover, .menu a:hover, .menu > button:hover, .result:hover { background: transparent; }
   .btn:hover { background: var(--surface); border-color: var(--border); }
+  .sd:not(.on):hover .dn { background: transparent; }
   .primary:hover { background: var(--accent); }
 }
 

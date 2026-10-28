@@ -1,4 +1,4 @@
-import { api, esc, $, $$, icon, toast, showError, initials, calStyle, applyTheme, themePref, isApp, haptic } from './common.js';
+import { api, esc, $, $$, icon, toast, showError, initials, calStyle, applyTheme, themePref, isApp, haptic, nativeSync } from './common.js';
 
 const HOUR = 52;
 const MONTHS = ['januari', 'februari', 'maart', 'april', 'mei', 'juni', 'juli', 'augustus', 'september', 'oktober', 'november', 'december'];
@@ -73,6 +73,9 @@ function rangeFor(view, cursor) {
 
 const range = () => rangeFor(state.view, state.cursor);
 
+// Wat we ophalen: in de dagweergave de hele week (voor de weekbalk en direct wisselen).
+const dataRangeFor = (view, cursor) => rangeFor(view === 'day' ? 'week' : view, cursor);
+
 function shifted(view, cursor, dir) {
   if (view === 'day') return addDays(cursor, dir);
   if (view === 'week') return addDays(cursor, 7 * dir);
@@ -106,7 +109,7 @@ async function fetchRange(r) {
 function prefetch() {
   const run = () => {
     for (const dir of [1, -1]) {
-      const r = rangeFor(state.view, shifted(state.view, state.cursor, dir));
+      const r = dataRangeFor(state.view, shifted(state.view, state.cursor, dir));
       if (!cache.has(rangeKey(r))) fetchRange(r).catch(() => {});
     }
   };
@@ -121,7 +124,7 @@ async function loadCals() {
 // Meteen tekenen met wat we al hebben, daarna stil bijwerken.
 async function load({ animate = false, cals = false } = {}) {
   const seq = ++loadSeq;
-  const r = range();
+  const r = dataRangeFor(state.view, state.cursor);
   const cached = cache.get(rangeKey(r));
   if (cached || animate) {
     state.events = cached || [];
@@ -177,7 +180,7 @@ function renderHeader() {
   const c = state.cursor;
   let title, sub;
   if (state.view === 'day') {
-    title = `${DAYS[c.getDay()]} ${c.getDate()} ${MONTHS[c.getMonth()]}`;
+    title = `${DAYS[c.getDay()]} ${c.getDate()} ${(isApp ? MONTHS_SHORT : MONTHS)[c.getMonth()]}`;
     sub = `${c.getFullYear()} · week ${isoWeek(c)}`;
   } else if (state.view === 'week') {
     const s = startOfWeek(c);
@@ -330,12 +333,22 @@ function nowTop() {
 function renderTimeGrid(days) {
   const today = new Date();
   const evs = visible();
-  const allDay = evs.filter((o) => o.allDay);
+  const shownEnd = addDays(days[days.length - 1], 1);
+  const allDay = evs.filter((o) => o.allDay && o.startD < shownEnd && o.endD > days[0]);
   const timed = evs.filter((o) => !o.allDay);
   const multi = days.length > 1;
 
   const head = days.map((d) => `<button type="button" class="day-head ${sameDay(d, today) ? 'today' : ''}" data-day="${ymd(d)}">
       <span class="dw">${DOW[(d.getDay() + 6) % 7]}</span><span class="dn">${d.getDate()}</span></button>`).join('');
+
+  // Dagweergave: de hele week als bolletjes, met een stipje op dagen met afspraken.
+  const strip = multi ? '' : Array.from({ length: 7 }, (_, i) => addDays(startOfWeek(days[0]), i)).map((d) => {
+    const next = addDays(d, 1);
+    const has = evs.some((o) => o.startD < next && (o.endD > d || (+o.endD === +o.startD && o.startD >= d)));
+    const cls = ['sd', sameDay(d, days[0]) ? 'on' : '', sameDay(d, today) ? 'today' : ''].join(' ');
+    return `<button type="button" class="${cls}" data-strip="${ymd(d)}" aria-pressed="${sameDay(d, days[0])}" aria-label="${DAYS[d.getDay()]} ${d.getDate()} ${MONTHS[d.getMonth()]}">
+      <span class="dw">${DOW[(d.getDay() + 6) % 7]}</span><span class="dn">${d.getDate()}</span><span class="dot ${has ? '' : 'none'}"></span></button>`;
+  }).join('');
 
   const allDayCells = days.map((d) => {
     const next = addDays(d, 1);
@@ -367,7 +380,7 @@ function renderTimeGrid(days) {
 
   return `<div class="scroller" id="scroller"><div class="tg ${multi ? 'week' : 'day'}" style="--cols:${days.length};--hour:${HOUR}px">
     <div class="tg-sticky">
-      <div class="tg-head"><span></span>${head}</div>
+      ${multi ? `<div class="tg-head"><span></span>${head}</div>` : `<div class="week-strip">${strip}</div>`}
       <div class="tg-allday"><span class="lbl">${allDay.length ? 'hele dag' : ''}</span>${allDayCells}</div>
     </div>
     <div class="tg-body"><div class="tg-hours">${hours}</div>${cols}</div>
@@ -709,7 +722,7 @@ async function save(e) {
     toast(editing ? 'Afspraak bijgewerkt' : 'Afspraak toegevoegd');
     state.selected = null;
     state.pendingSelect = res.id;
-    refresh();
+    refresh().then(nativeSync);
   } catch (err) {
     showError($('#dlgError'), err.message);
   } finally {
@@ -742,7 +755,7 @@ async function remove(id, btn, key = null) {
   } catch (err) {
     toast(err.message);
   }
-  refresh();
+  refresh().then(nativeSync);
 }
 
 // ---------- Zoeken ----------
@@ -961,6 +974,16 @@ async function init() {
       select(occ.dataset.occ);
       if (narrow.matches) openEdit(...occ.dataset.occ.split('|'));
       return;
+    }
+    const sd = e.target.closest('[data-strip]');
+    if (sd) {
+      const d = parseYmd(sd.dataset.strip);
+      if (sameDay(d, state.cursor)) return;
+      haptic();
+      slideDir = d > state.cursor ? 1 : -1;
+      state.cursor = d;
+      state.miniMonth = null;
+      return load({ animate: true });
     }
     const day = e.target.closest('[data-day]');
     if (day) return gotoDay(day.dataset.day, 'day');

@@ -61,6 +61,13 @@ export function haptic(kind = 'tick') {
   } catch {}
 }
 
+// De app laten weten dat afspraken veranderd zijn (herinneringen opnieuw inplannen).
+export function nativeSync() {
+  try {
+    window.AgendaNative?.syncReminders();
+  } catch {}
+}
+
 // Vervagende randen boven (statusbalk) en onder (navigatiebalk), in drie lagen voor een zachte overloop.
 if (isApp) {
   const addEdges = () => {

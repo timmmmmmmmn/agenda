@@ -5,7 +5,7 @@ import {
   clearSessionCookie, sessionUser, tooManyAttempts, recordAttempt, clientIp, newAppPassword,
   normalizeAppPassword, sha256hex, randomToken
 } from '../_lib/util.js';
-import { occurrences, details, buildEvent, patchEvent, excludeOccurrence, overrideOccurrence } from '../_lib/ical.js';
+import { occurrences, details, buildEvent, patchEvent, excludeOccurrence, overrideOccurrence, zonedToUtc, DEFAULT_TZ } from '../_lib/ical.js';
 import {
   visibleCalendars, requireCalendar, createCalendar, putEvent, deleteEvent
 } from '../_lib/store.js';
@@ -270,7 +270,7 @@ async function createEventApi(env, user, request) {
   await requireCalendar(env, user.id, b.calendar_id, true);
   const uid = crypto.randomUUID();
   const ics = buildEvent(uid, eventFields(b));
-  const { id } = await putEvent(env, b.calendar_id, `${uid}.ics`, ics);
+  const { id } = await putEvent(env, b.calendar_id, `${uid}.ics`, ics, user.id);
   return json({ id }, 201);
 }
 
@@ -280,16 +280,16 @@ async function updateEventApi(env, user, id, request) {
   if (b.scope === 'this') {
     // Alleen dit ene voorkomen aanpassen: blijft in dezelfde agenda.
     const ics = overrideOccurrence(row.ics, occurrenceKey(b.occurrence), eventFields(b));
-    const res = await putEvent(env, row.calendar_id, row.href, ics);
+    const res = await putEvent(env, row.calendar_id, row.href, ics, user.id);
     return json({ id: res.id });
   }
   const ics = patchEvent(row.ics, eventFields(b));
   const target = b.calendar_id && b.calendar_id !== row.calendar_id ? b.calendar_id : row.calendar_id;
   if (target !== row.calendar_id) {
     await requireCalendar(env, user.id, target, true);
-    await deleteEvent(env, row.calendar_id, row.href);
+    await deleteEvent(env, row.calendar_id, row.href, user.id);
   }
-  const res = await putEvent(env, target, row.href, ics);
+  const res = await putEvent(env, target, row.href, ics, user.id);
   return json({ id: res.id });
 }
 
@@ -297,10 +297,10 @@ async function deleteEventApi(env, user, id, url) {
   const { row } = await loadEvent(env, user, id, true);
   const key = occurrenceKey(url.searchParams.get('occurrence'));
   if (key != null) {
-    await putEvent(env, row.calendar_id, row.href, excludeOccurrence(row.ics, key));
+    await putEvent(env, row.calendar_id, row.href, excludeOccurrence(row.ics, key), user.id);
     return json({ ok: true });
   }
-  await deleteEvent(env, row.calendar_id, row.href);
+  await deleteEvent(env, row.calendar_id, row.href, user.id);
   return json({ ok: true });
 }
 
@@ -335,6 +335,68 @@ async function searchEvents(env, user, url) {
   const upcoming = out.filter((o) => o.end >= iso.slice(0, o.allDay ? 10 : 24)).sort((a, b) => (a.start < b.start ? -1 : 1));
   const past = out.filter((o) => !upcoming.includes(o)).sort((a, b) => (a.start > b.start ? -1 : 1));
   return json([...upcoming, ...past].slice(0, 25));
+}
+
+// ---------- Meldingen voor de app ----------
+
+// Herinneringen voor de komende 48 uur, en wat anderen sinds `since` in gedeelde agenda's veranderden.
+async function feed(env, user, url) {
+  const t = Date.now();
+  const since = Math.max(Number(url.searchParams.get('since')) || t, t - 7 * DAY);
+  const cals = await visibleCalendars(env, user.id);
+  if (!cals.length) return json({ now: t, reminders: [], changes: [] });
+  const ids = cals.map((c) => c.id);
+  const calName = new Map(cals.map((c) => [c.id, c.name]));
+  const marks = ids.map(() => '?').join(',');
+
+  const reminders = [];
+  const { results: rows } = await env.DB.prepare(
+    `SELECT id, calendar_id, ics FROM events
+      WHERE calendar_id IN (${marks}) AND first_start < ? AND (last_end IS NULL OR last_end > ?)`
+  ).bind(...ids, t + 3 * DAY, t - DAY).all();
+  for (const row of rows) {
+    for (const o of occurrences(row.ics, t - DAY, t + 3 * DAY)) {
+      if (o.alarm == null) continue;
+      let startMs;
+      if (o.allDay) {
+        const [y, m, d] = o.start.split('-').map(Number);
+        startMs = zonedToUtc(y, m, d, 0, 0, 0, DEFAULT_TZ);
+      } else startMs = Date.parse(o.start);
+      const at = startMs - o.alarm * 60000;
+      if (at < t - 60000 || at > t + 2 * DAY) continue;
+      reminders.push({
+        key: `${row.id}-${o.key}`,
+        at,
+        start: startMs,
+        allDay: o.allDay,
+        title: o.title || '(geen titel)',
+        location: o.location,
+        calendar: calName.get(row.calendar_id)
+      });
+    }
+  }
+
+  const changes = [];
+  const { results: changed } = await env.DB.prepare(
+    `SELECT e.id, e.calendar_id, e.summary, e.updated_at AS at, e.created_at, u.full_name AS who
+       FROM events e JOIN users u ON u.id = e.updated_by
+      WHERE e.calendar_id IN (${marks}) AND e.updated_at > ? AND e.updated_by != ?
+      ORDER BY e.updated_at LIMIT 20`
+  ).bind(...ids, since, user.id).all();
+  for (const c of changed) {
+    changes.push({ id: c.id, action: c.created_at === c.at ? 'toegevoegd' : 'gewijzigd', title: c.summary || '(geen titel)', who: c.who, calendar: calName.get(c.calendar_id), at: c.at });
+  }
+  const { results: removed } = await env.DB.prepare(
+    `SELECT tb.calendar_id, tb.summary, tb.deleted_at AS at, u.full_name AS who
+       FROM tombstones tb JOIN users u ON u.id = tb.deleted_by
+      WHERE tb.calendar_id IN (${marks}) AND tb.deleted_at > ? AND tb.deleted_by != ?
+      ORDER BY tb.deleted_at LIMIT 20`
+  ).bind(...ids, since, user.id).all();
+  for (const c of removed) {
+    changes.push({ id: null, action: 'verwijderd', title: c.summary || '(geen titel)', who: c.who, calendar: calName.get(c.calendar_id), at: c.at });
+  }
+  changes.sort((a, b) => a.at - b.at);
+  return json({ now: t, reminders: reminders.sort((a, b) => a.at - b.at), changes });
 }
 
 // ---------- Beheer ----------
@@ -423,6 +485,7 @@ async function route(request, env) {
   }
 
   if (p === 'search' && m === 'GET') return searchEvents(env, user, url);
+  if (p === 'feed' && m === 'GET') return feed(env, user, url);
 
   if (a === 'events') {
     if (!b && m === 'GET') return listEvents(env, user, url);

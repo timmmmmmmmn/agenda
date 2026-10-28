@@ -59,7 +59,7 @@ export async function getEvent(env, calId, href) {
   return env.DB.prepare('SELECT * FROM events WHERE calendar_id = ? AND href = ?').bind(calId, href).first();
 }
 
-export async function putEvent(env, calId, href, ics) {
+export async function putEvent(env, calId, href, ics, userId = null) {
   const s = summarize(ics);
   if (!s || !s.uid) throw new HttpError(400, 'Ongeldige afspraak (geen VEVENT of UID)');
   const etag = await etagFor(ics);
@@ -67,26 +67,29 @@ export async function putEvent(env, calId, href, ics) {
   const res = await env.DB.batch([
     env.DB.prepare('UPDATE calendars SET sync_token = sync_token + 1 WHERE id = ?').bind(calId),
     env.DB.prepare(
-      `INSERT INTO events (calendar_id, href, uid, ics, etag, summary, first_start, last_end, recurring, modseq, updated_at)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, (SELECT sync_token FROM calendars WHERE id = ?1), ?10)
+      `INSERT INTO events (calendar_id, href, uid, ics, etag, summary, first_start, last_end, recurring, modseq, updated_at, created_at, updated_by)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, (SELECT sync_token FROM calendars WHERE id = ?1), ?10, ?10, ?11)
        ON CONFLICT (calendar_id, href) DO UPDATE SET
          uid = excluded.uid, ics = excluded.ics, etag = excluded.etag, summary = excluded.summary,
          first_start = excluded.first_start, last_end = excluded.last_end, recurring = excluded.recurring,
-         modseq = excluded.modseq, updated_at = excluded.updated_at
+         modseq = excluded.modseq, updated_at = excluded.updated_at, updated_by = excluded.updated_by
        RETURNING id`
-    ).bind(calId, href, s.uid, ics, etag, s.summary, s.firstStart, s.lastEnd, s.recurring, t),
+    ).bind(calId, href, s.uid, ics, etag, s.summary, s.firstStart, s.lastEnd, s.recurring, t, userId),
     env.DB.prepare('DELETE FROM tombstones WHERE calendar_id = ? AND href = ?').bind(calId, href)
   ]);
   return { etag, id: res[1].results[0].id };
 }
 
-export async function deleteEvent(env, calId, href) {
+export async function deleteEvent(env, calId, href, userId = null) {
   await env.DB.batch([
     env.DB.prepare('UPDATE calendars SET sync_token = sync_token + 1 WHERE id = ?').bind(calId),
     env.DB.prepare(
-      `INSERT INTO tombstones (calendar_id, href, modseq) VALUES (?1, ?2, (SELECT sync_token FROM calendars WHERE id = ?1))
-       ON CONFLICT (calendar_id, href) DO UPDATE SET modseq = excluded.modseq`
-    ).bind(calId, href),
+      `INSERT INTO tombstones (calendar_id, href, modseq, summary, deleted_by, deleted_at)
+       VALUES (?1, ?2, (SELECT sync_token FROM calendars WHERE id = ?1),
+               (SELECT summary FROM events WHERE calendar_id = ?1 AND href = ?2), ?3, ?4)
+       ON CONFLICT (calendar_id, href) DO UPDATE SET modseq = excluded.modseq, summary = excluded.summary,
+         deleted_by = excluded.deleted_by, deleted_at = excluded.deleted_at`
+    ).bind(calId, href, userId, now()),
     env.DB.prepare('DELETE FROM events WHERE calendar_id = ? AND href = ?').bind(calId, href)
   ]);
 }
