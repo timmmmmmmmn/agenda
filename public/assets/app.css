@@ -325,6 +325,15 @@ select.field option { color: #161B26; background: #fff; }
 .chip.sel { box-shadow: inset 3px 0 0 var(--c), 0 0 0 2px var(--c); }
 .chip .tm { font-weight: 500; opacity: .8; margin-right: 4px; }
 
+/* Verslepen */
+.ev .grip { position: absolute; left: 0; right: 0; bottom: 0; height: 8px; cursor: ns-resize; }
+.ev, .chip { -webkit-touch-callout: none; }
+.ev.dragging, .chip.dragging { z-index: 20; opacity: .9; box-shadow: var(--shadow-lg); pointer-events: none; transition: none; animation: none !important; }
+.chip.dragging { outline: 2px dashed var(--c, var(--accent)); outline-offset: 1px; }
+.mcell.drop { background: var(--accent-soft); }
+html.is-dragging, html.is-dragging * { cursor: grabbing !important; -webkit-user-select: none; user-select: none; }
+html.app .ev.dragging { transform: scale(1.02); }
+
 /* Weekbalk in de dagweergave */
 .week-strip { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px; padding: 8px 8px 4px; }
 .sd { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 4px 0 2px; border: 0; border-radius: 14px; background: transparent; color: var(--text); }
@@ -373,6 +382,20 @@ dialog[open] .sheet { animation: sheet 180ms var(--ease) both; }
 .sheet-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
 .sheet-actions .spacer { flex-grow: 1; }
 .note { font-size: 13px; color: var(--muted); padding: 10px 12px; border-radius: 10px; background: var(--surface-2); margin: 0; }
+
+/* Herhaling instellen */
+.rule-box { display: flex; flex-direction: column; gap: 10px; padding: 12px; border-radius: 12px; background: var(--surface-2); }
+.rule-box[hidden], .rule-box [hidden] { display: none !important; }
+.rule-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.rule-row > span { font-size: 13px; font-weight: 600; color: var(--text2); min-width: 40px; }
+.rule-row .field { width: auto; flex: 1 1 120px; min-width: 0; }
+.rule-row .rule-n { flex: 0 0 76px; }
+.rule-days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+.rule-days button { height: 36px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); color: var(--text2); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; transition: background 120ms, color 120ms; }
+.rule-days button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+html.app .rule-days button[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--on-ink); }
+.rule-sum { margin: 0; font-size: 13px; color: var(--muted); }
+.rule-box .field { background: var(--surface); }
 
 /* ---------- Toast ---------- */
 
@@ -520,7 +543,7 @@ html.app .appnav { display: flex; position: fixed; left: 12px; right: 12px; bott
 .appnav > * { pointer-events: auto; }
 .appnav-pill {
   position: relative; flex: 1 1 auto; max-width: 440px; height: 64px; padding: 6px;
-  display: grid; grid-template-columns: repeat(5, minmax(0, 1fr));
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
   border-radius: 32px; border: 1px solid var(--border);
   background: color-mix(in srgb, var(--surface) 80%, transparent);
   -webkit-backdrop-filter: blur(20px) saturate(170%); backdrop-filter: blur(20px) saturate(170%);
@@ -530,7 +553,7 @@ html.app .appnav { display: flex; position: fixed; left: 12px; right: 12px; bott
 .appnav-pill button .icon { width: 22px; height: 22px; stroke-width: 1.8; }
 .appnav-pill button[aria-current="true"] { color: var(--accent-ink); }
 .appnav-pill button:active, .appnav-add:active { transform: scale(.92); }
-.appnav-ind { position: absolute; top: 6px; bottom: 6px; left: 6px; width: calc((100% - 12px) / 5); border-radius: 26px; background: var(--accent-soft); transition: transform 280ms cubic-bezier(.3, 1.25, .5, 1); }
+.appnav-ind { position: absolute; top: 6px; bottom: 6px; left: 6px; width: calc((100% - 12px) / 4); border-radius: 26px; background: var(--accent-soft); transition: transform 280ms cubic-bezier(.3, 1.25, .5, 1); }
 .appnav-add { width: 64px; height: 64px; padding: 0; border-radius: 32px; flex-shrink: 0; box-shadow: 0 10px 26px rgba(47, 111, 237, .42); }
 .appnav-add .icon { width: 26px; height: 26px; stroke-width: 2.2; }
 
@@ -562,6 +585,77 @@ html.app #moreBody .menu { position: static; width: auto; padding: 0; border: 0;
 html.app #moreBody .menu a, html.app #moreBody .menu > button { min-height: 48px; font-size: 15px; }
 html.app #moreBody .panel { box-shadow: none; border: 0; background: transparent; padding: 4px 12px 0; }
 html.app #moreBody .cal-row { min-height: 44px; font-size: 15px; }
+
+/* ---------- Instellingen: abonneren, importeren, back-up ---------- */
+.data-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px; }
+.data-block { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.data-h { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 15px; font-weight: 700; }
+.data-h .icon { width: 18px; height: 18px; color: var(--accent-ink); }
+.data-block > p.small { margin: 0; font-size: 13px; color: var(--muted); line-height: 1.45; }
+.data-list { display: flex; flex-direction: column; gap: 8px; }
+.data-row { flex-wrap: wrap; }
+.data-row .grow { flex: 1 1 0; }
+.data-row .actions { display: flex; gap: 6px; flex-wrap: wrap; flex-basis: 100%; padding-left: 22px; }
+.data-row .feed-url { font-size: 11px; }
+a.sm, a.soft { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }
+.dl-one { color: var(--text); text-decoration: none; }
+.dl-one:hover { border-color: var(--accent); }
+.dl-one .icon { width: 18px; height: 18px; color: var(--muted); }
+.dl-all { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 42px; border-radius: 12px; text-decoration: none; font-weight: 600; }
+.dl-all .icon { width: 18px; height: 18px; }
+.file-pick { display: inline-flex; align-items: center; justify-content: center; height: 42px; cursor: pointer; }
+.imp-status { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 10px; background: var(--surface-2); font-size: 13.5px; color: var(--text2); }
+.imp-status.ok { color: var(--ok, #1F9D61); }
+.imp-status.err { color: var(--danger, #E5484D); }
+.imp-status .icon { width: 16px; height: 16px; flex-shrink: 0; }
+.imp-status .spinner { width: 16px; height: 16px; border-width: 2px; }
+
+/* ---------- Planning: lijst van alle afspraken (app) ---------- */
+.alist { height: 100%; overflow-y: auto; overscroll-behavior: contain; padding: 0 14px; box-sizing: border-box; -webkit-overflow-scrolling: touch; }
+html.app .alist { padding-top: calc(var(--app-top) + 4px); padding-bottom: calc(var(--app-bottom) + 12px); }
+.lstart { display: flex; justify-content: center; padding: 6px 0 4px; }
+.lstart .btn { height: 34px; font-size: 13px; color: var(--muted); gap: 6px; }
+.lstart .icon.up { transform: rotate(90deg); width: 15px; height: 15px; }
+.lmonth { margin: 22px 4px 2px; font-size: 13px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.lday { padding: 10px 0 6px; border-bottom: 1px solid var(--line); }
+.lday:last-child { border-bottom: 0; }
+.lhead { display: flex; align-items: center; gap: 12px; width: 100%; padding: 4px 4px 8px; border: 0; background: none; color: var(--text); text-align: left; font: inherit; cursor: pointer; }
+.ldn { width: 38px; height: 38px; flex-shrink: 0; border-radius: 12px; display: grid; place-items: center; font-size: 18px; font-weight: 700; background: var(--chip); color: var(--text); }
+.lday.today .ldn { background: var(--ink, var(--accent)); color: var(--on-ink, #fff); }
+.lday.past { opacity: .6; }
+.lname { display: flex; flex-direction: column; min-width: 0; }
+.lname strong { font-size: 15px; font-weight: 700; }
+.lname span { font-size: 12.5px; color: var(--muted); }
+.lempty { margin: 0 0 6px 54px; font-size: 13.5px; color: var(--muted); }
+.lrow { display: grid; grid-template-columns: 42px 4px minmax(0, 1fr); gap: 10px; align-items: stretch; width: 100%; padding: 8px 4px 8px 0; margin: 0 0 2px; border: 0; border-radius: 12px; background: none; color: var(--text); text-align: left; font: inherit; cursor: pointer; -webkit-touch-callout: none; }
+.lrow:active { background: var(--chip); }
+.lt { display: flex; flex-direction: column; align-items: flex-end; justify-content: center; gap: 1px; font-variant-numeric: tabular-nums; }
+.lt-a { font-size: 13px; font-weight: 700; color: var(--text); white-space: nowrap; }
+.lt-a:only-child { font-size: 11px; text-align: right; line-height: 1.15; white-space: normal; }
+.lt-b { font-size: 12px; color: var(--muted); }
+.lbar { border-radius: 2px; background: var(--solid, var(--c)); }
+.lx { display: flex; flex-direction: column; justify-content: center; gap: 2px; min-width: 0; padding: 2px 0; }
+.lx strong { font-size: 15px; font-weight: 600; line-height: 1.25; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.lx span { display: flex; align-items: center; gap: 4px; font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lx .icon.mini { width: 13px; height: 13px; flex-shrink: 0; }
+.lend { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 26px 0 10px; color: var(--muted); font-size: 13.5px; }
+.lend p { margin: 0; }
+.spinner { width: 22px; height: 22px; border-radius: 50%; border: 2.5px solid var(--line); border-top-color: var(--muted); animation: spin 800ms linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+html.app .ldn, html.app .lt-a { font-family: var(--font-num); }
+html.app .ldn { font-size: 21px; }
+html.app .lt-a { font-size: 15px; }
+html.app .lt-a:only-child { font-family: var(--font-ui); font-size: 11px; }
+html.app[data-view="list"] .topbar #prev, html.app[data-view="list"] .topbar #next { display: none; }
+
+/* Navigatie met vier tabs; "Agenda" opent een keuzemenu */
+.viewpick { position: absolute; bottom: calc(100% + 10px); left: var(--pick-x, 50%); transform: translateX(-50%); display: flex; gap: 4px; padding: 5px; border-radius: 20px; background: var(--surface); border: 1px solid var(--line); box-shadow: 0 1px 2px rgba(0, 0, 0, .06), 0 14px 34px rgba(0, 0, 0, .16); pointer-events: auto; animation: pickIn 200ms cubic-bezier(.2, .9, .25, 1) both; }
+.viewpick[hidden] { display: none; }
+.viewpick button { display: flex; flex-direction: column; align-items: center; gap: 4px; width: 78px; padding: 10px 0 8px; border: 0; border-radius: 15px; background: transparent; color: var(--text2); font: inherit; font-size: 12px; font-weight: 700; letter-spacing: .03em; }
+.viewpick button .icon { width: 22px; height: 22px; stroke-width: 2; }
+.viewpick button[aria-current="true"] { background: var(--ink); color: var(--on-ink); }
+.viewpick button:active { transform: scale(.95); }
+@keyframes pickIn { from { opacity: 0; transform: translate(-50%, 8px) scale(.96); } }
 
 /* Op een aanraakscherm blijft een "hover" anders hangen na het tikken */
 @media (hover: none) {
@@ -652,7 +746,7 @@ html.app .now-line { height: 2px; }
 
 /* Zwevende navigatie: strakke balk, actief tabblad zwart, + als cyaan tegel */
 html.app .appnav-pill { height: 62px; padding: 5px; border-radius: 22px; background: var(--surface); -webkit-backdrop-filter: none; backdrop-filter: none; border: 1px solid var(--line); box-shadow: 0 1px 2px rgba(0, 0, 0, .06), 0 10px 28px rgba(0, 0, 0, .1); }
-html.app .appnav-ind { top: 5px; bottom: 5px; left: 5px; width: calc((100% - 10px) / 5); border-radius: 17px; background: var(--ink); transition: transform 240ms cubic-bezier(.2, .8, .2, 1); }
+html.app .appnav-ind { top: 5px; bottom: 5px; left: 5px; width: calc((100% - 10px) / 4); border-radius: 17px; background: var(--ink); transition: transform 240ms cubic-bezier(.2, .8, .2, 1); }
 html.app .appnav-pill button { border-radius: 17px; color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; gap: 3px; }
 html.app .appnav-pill button .icon { width: 21px; height: 21px; stroke-width: 2; }
 html.app .appnav-pill button[aria-current="true"] { color: var(--on-ink); }

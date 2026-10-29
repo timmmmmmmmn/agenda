@@ -120,6 +120,35 @@
     <div id="sharedWithMe"></div>
   </section>
 
+  <section class="glass card rise" id="data" aria-labelledby="h-data">
+    <div><h2 id="h-data">Abonneren, importeren en back-up</h2><span class="sub">Je agenda in andere apps volgen, afspraken van elders binnenhalen, of alles veilig downloaden.</span></div>
+    <div class="data-grid">
+      <div class="data-block">
+        <h3 class="data-h"><span id="icFeed"></span>Abonneer-link</h3>
+        <p class="small">Volg een agenda (alleen lezen) in Google Agenda, Outlook of een andere app. Wie de link heeft kan meekijken, dus deel hem alleen met mensen die je vertrouwt. Met <em>Nieuwe link</em> werkt de oude niet meer.</p>
+        <div id="feedList" class="data-list"></div>
+      </div>
+      <div class="data-block">
+        <h3 class="data-h"><span id="icImport"></span>Importeren</h3>
+        <p class="small">Zet afspraken uit een .ics-bestand of van een link (bijv. een rooster of feestdagen) in een van je agenda's. Komt een afspraak al voor, dan wordt hij bijgewerkt.</p>
+        <label class="form-label"><span>Naar agenda</span><select class="field" id="impCal"></select></label>
+        <label class="file-pick btn press"><input type="file" id="impFile" accept=".ics,text/calendar" hidden><span>Kies een .ics-bestand</span></label>
+        <form class="inline-form" id="impUrlForm">
+          <label class="sr-only" for="impUrl">Link naar een agenda</label>
+          <input class="field" id="impUrl" name="url" type="url" inputmode="url" placeholder="https://… of webcal://…" autocomplete="off" autocapitalize="none">
+          <button class="btn press" type="submit" style="height:40px">Ophalen</button>
+        </form>
+        <div class="imp-status" id="impStatus" hidden></div>
+      </div>
+      <div class="data-block">
+        <h3 class="data-h"><span id="icBackup"></span>Back-up</h3>
+        <p class="small">Download al je afspraken. Terugzetten kan hierboven met Importeren; de bestanden openen ook in Apple Agenda en Google Agenda.</p>
+        <a class="primary press dl-all" href="/api/export" download id="expAll"></a>
+        <div id="expList" class="data-list"></div>
+      </div>
+    </div>
+  </section>
+
   <section class="glass card rise" id="beheer" aria-labelledby="h-admin" hidden>
     <div><h2 id="h-admin">Gebruikers beheren</h2><span class="sub">Nieuwe accounts kunnen pas inloggen nadat jij ze hebt goedgekeurd.</span></div>
     <div id="adminNew" hidden></div>

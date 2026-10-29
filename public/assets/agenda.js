@@ -50,7 +50,8 @@ const state = {
   me: null,
   cals: [],
   hidden: new Set(store.get('hiddenCals', [])),
-  view: store.get('view', narrow.matches ? 'day' : 'week'),
+  view: isApp ? 'list' : store.get('view', narrow.matches ? 'day' : 'week'),
+  calView: store.get('view', 'day'),
   cursor: startOfDay(new Date()),
   miniMonth: null,
   events: [],
@@ -123,6 +124,7 @@ async function loadCals() {
 
 // Meteen tekenen met wat we al hebben, daarna stil bijwerken.
 async function load({ animate = false, cals = false } = {}) {
+  if (state.view === 'list') return loadList({ animate, cals });
   const seq = ++loadSeq;
   const r = dataRangeFor(state.view, state.cursor);
   const cached = cache.get(rangeKey(r));
@@ -179,7 +181,12 @@ function render() {
 function renderHeader() {
   const c = state.cursor;
   let title, sub;
-  if (state.view === 'day') {
+  document.documentElement.dataset.view = state.view;
+  if (state.view === 'list') {
+    const t = new Date();
+    title = 'Planning';
+    sub = `Vandaag · ${DAYS[t.getDay()]} ${t.getDate()} ${MONTHS[t.getMonth()]}`;
+  } else if (state.view === 'day') {
     title = `${DAYS[c.getDay()]} ${c.getDate()} ${(isApp ? MONTHS_SHORT : MONTHS)[c.getMonth()]}`;
     sub = `${c.getFullYear()} · week ${isoWeek(c)}`;
   } else if (state.view === 'week') {
@@ -201,8 +208,16 @@ function renderHeader() {
   const w = $('#viewSeg button').offsetWidth || 76;
   $('#viewSeg .pill').style.transform = `translateX(${idx * (w + 2)}px)`;
   if (isApp) {
-    $$('#appnavPill [data-nav]').forEach((b) => b.setAttribute('aria-current', String(b.dataset.nav === state.view)));
-    $('#appnavPill .appnav-ind').style.transform = `translateX(${idx * 100}%)`;
+    const tab = state.view === 'list' ? 'list' : 'agenda';
+    $$('#appnavPill [data-nav]').forEach((b) => b.setAttribute('aria-current', String(b.dataset.nav === tab)));
+    $('#appnavPill .appnav-ind').style.transform = `translateX(${tab === 'list' ? 0 : 100}%)`;
+    const ag = $('#appnavPill [data-nav="agenda"]');
+    if (ag && ag.dataset.shows !== state.calView) {
+      ag.dataset.shows = state.calView;
+      ag.querySelector('svg').outerHTML = icon(state.calView);
+      ag.querySelector('.lbl').textContent = { day: 'Dag', week: 'Week', month: 'Maand' }[state.calView];
+    }
+    $$('#viewPick [data-pick]').forEach((b) => b.setAttribute('aria-current', String(b.dataset.pick === state.view)));
   }
 }
 
@@ -372,7 +387,7 @@ function renderTimeGrid(days) {
       const w = 100 / n;
       return `<button type="button" class="ev ${short ? 'short' : ''} ${occId(o) === state.selected ? 'sel' : ''}" data-occ="${esc(occId(o))}"
         style="top:${top}px;height:${height}px;left:calc(${col * w}% + 3px);width:calc(${w}% - 6px);${calStyle(c.color)}">
-        <span class="t">${esc(o.title || '(geen titel)')}</span><span class="s">${hm(o.startD)}${short ? '' : ` – ${hm(o.endD)}`}${!short && o.location ? ` · ${esc(o.location)}` : ''}</span></button>`;
+        <span class="t">${esc(o.title || '(geen titel)')}</span><span class="s">${hm(o.startD)}${short ? '' : ` – ${hm(o.endD)}`}${!short && o.location ? ` · ${esc(o.location)}` : ''}</span>${o.can_write ? '<span class="grip" aria-hidden="true"></span>' : ''}</button>`;
     }).join('');
     const isToday = sameDay(d, today);
     return `<div class="tg-col ${isToday ? 'today' : ''}" data-col="${ymd(d)}">${html}${isToday ? `<div class="now-line" style="top:${nowTop()}px"></div>` : ''}</div>`;
@@ -416,6 +431,10 @@ function renderMonth() {
 let slideDir = 0;
 
 function renderBoard() {
+  if (drag?.active) {
+    drag.rerender = true;
+    return;
+  }
   const board = $('#board');
   board.classList.remove('slide-next', 'slide-prev');
   if (slideDir && state.animate) {
@@ -426,7 +445,11 @@ function renderBoard() {
   const prev = $('#scroller');
   const keepScroll = prev && !state.resetScroll ? prev.scrollTop : null;
   state.resetScroll = false;
-  if (state.view === 'month') board.innerHTML = renderMonth();
+  if (state.view === 'list') {
+    board.innerHTML = renderList();
+    listObserve();
+    if (keepScroll != null) $('#scroller').scrollTop = keepScroll;
+  } else if (state.view === 'month') board.innerHTML = renderMonth();
   else {
     const [s] = range();
     board.innerHTML = renderTimeGrid(Array.from({ length: state.view === 'day' ? 1 : 7 }, (_, i) => addDays(s, i)));
@@ -441,12 +464,409 @@ function renderBoard() {
   board.classList.toggle('calm', !state.animate);
 }
 
+// ---------- Lijst (start in de app) ----------
+// Begint vandaag en laadt per vier weken bij zodra je richting het eind scrolt.
+
+const CHUNK = 28;
+const list = { from: null, to: null, items: [], busy: false, empty: 0, ended: false, io: null };
+
+function listReset() {
+  const t = startOfDay(new Date());
+  Object.assign(list, { from: t, to: t, items: [], empty: 0, ended: false });
+  // Direct iets tonen bij het opstarten: de vorige stand uit het geheugen.
+  const snap = store.get('listSnap', null);
+  if (snap?.day === ymd(t)) {
+    list.items = snap.items.map(hydrate);
+    list.to = parseYmd(snap.to);
+  }
+}
+
+const hydrate = (o) => ({ ...o, startD: o.allDay ? parseYmd(o.start) : new Date(o.start), endD: o.allDay ? parseYmd(o.end) : new Date(o.end) });
+
+function mergeList(events, from, to) {
+  const keep = list.items.filter((o) => !(o.startD >= from && o.startD < to));
+  const fresh = events.filter((o) => o.startD >= from || (+from === +list.from && o.endD > from));
+  const seen = new Set();
+  list.items = [...keep, ...fresh].filter((o) => {
+    const k = occId(o);
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  }).sort((a, b) => a.startD - b.startD || (b.allDay - a.allDay));
+  state.events = list.items;
+}
+
+async function loadList({ animate = false, cals = false } = {}) {
+  const seq = ++loadSeq;
+  const today = startOfDay(new Date());
+  if (!list.from || !sameDay(list.from, today) && list.from > today) listReset();
+  if (animate || !list.items.length) {
+    state.events = list.items;
+    state.animate = animate;
+    render();
+  }
+  setSync('busy', 'Bijwerken…');
+  try {
+    // Alles wat al geladen is opnieuw ophalen (hooguit een jaar), anders de eerste vier weken.
+    const to = list.to > list.from ? (list.to - list.from > 360 * 864e5 ? addDays(list.from, 360) : list.to) : addDays(list.from, CHUNK);
+    const [events] = await Promise.all([fetchRange([list.from, to]), cals ? loadCals() : null]);
+    if (seq !== loadSeq || state.view !== 'list') return;
+    const before = JSON.stringify(list.items.map(occId));
+    mergeList(events, list.from, to);
+    if (to > list.to) list.to = to;
+    snapshot();
+    setSync('', 'Gesynchroniseerd');
+    if (before !== JSON.stringify(list.items.map(occId)) || cals || animate) render();
+    else renderBoard();
+    listMaybeMore();
+  } catch (err) {
+    if (err.status === 401) return location.replace('/login');
+    if (seq === loadSeq) setSync('err', 'Niet verbonden');
+  }
+}
+
+function snapshot() {
+  const t = startOfDay(new Date());
+  const items = list.items.filter((o) => o.endD > t && o.startD < addDays(t, CHUNK)).slice(0, 80)
+    .map(({ startD, endD, ...rest }) => rest);
+  store.set('listSnap', { day: ymd(t), to: ymd(addDays(t, CHUNK)), items });
+}
+
+async function listMore() {
+  if (list.busy || list.ended || state.view !== 'list') return;
+  list.busy = true;
+  const from = list.to;
+  const to = addDays(from, CHUNK);
+  try {
+    const events = await fetchRange([from, to]);
+    if (state.view !== 'list') return;
+    const n = list.items.length;
+    mergeList(events, from, to);
+    list.to = to;
+    list.empty = list.items.length > n ? 0 : list.empty + CHUNK;
+    if (list.empty >= 365) list.ended = true;
+    appendList(from, to);
+  } catch {
+    // later opnieuw
+  } finally {
+    list.busy = false;
+  }
+  listMaybeMore();
+}
+
+async function listEarlier() {
+  if (list.busy) return;
+  list.busy = true;
+  const to = list.from;
+  const from = addDays(to, -CHUNK);
+  try {
+    const events = await fetchRange([from, to]);
+    list.from = from;
+    mergeList(events, from, to);
+    const sc = $('#scroller');
+    const h = sc.scrollHeight;
+    const top = sc.scrollTop;
+    renderBoard();
+    const sc2 = $('#scroller');
+    sc2.scrollTop = top + (sc2.scrollHeight - h);
+  } catch (err) {
+    toast(err.message);
+  } finally {
+    list.busy = false;
+  }
+}
+
+// Nog dicht bij het eind? Dan meteen verder laden.
+function listMaybeMore() {
+  const sc = $('#scroller');
+  const end = $('#listEnd');
+  if (!sc || !end || list.ended) return;
+  if (end.getBoundingClientRect().top < sc.getBoundingClientRect().bottom + 800) listMore();
+}
+
+function listObserve() {
+  list.io?.disconnect();
+  const sc = $('#scroller');
+  const end = $('#listEnd');
+  if (!sc || !end) return;
+  list.io = new IntersectionObserver((entries) => {
+    if (entries.some((e) => e.isIntersecting)) listMore();
+  }, { root: sc, rootMargin: '0px 0px 800px 0px' });
+  list.io.observe(end);
+}
+
+function dayLabel(d) {
+  const t = startOfDay(new Date());
+  const diff = Math.round((d - t) / 864e5);
+  const base = `${DAYS[d.getDay()]} ${d.getDate()} ${MONTHS[d.getMonth()]}${d.getFullYear() !== t.getFullYear() ? ` ${d.getFullYear()}` : ''}`;
+  if (diff === 0) return ['Vandaag', base];
+  if (diff === 1) return ['Morgen', base];
+  if (diff === -1) return ['Gisteren', base];
+  return [base.charAt(0).toUpperCase() + base.slice(1), ''];
+}
+
+function listRow(o, day) {
+  const c = calById(o.calendar_id);
+  let when;
+  if (o.allDay) when = '<span class="lt-a">Hele dag</span>';
+  else {
+    const startsToday = sameDay(o.startD, day);
+    const endsToday = o.endD <= addDays(day, 1);
+    when = `<span class="lt-a">${startsToday ? hm2(o.startD) : '…'}</span><span class="lt-b">${endsToday ? hm2(o.endD) : '…'}</span>`;
+  }
+  return `<button type="button" class="lrow" data-occ="${esc(occId(o))}" style="${calStyle(c.color)}">
+    <span class="lt">${when}</span><span class="lbar"></span>
+    <span class="lx"><strong>${esc(o.title || '(geen titel)')}</strong>${o.location || o.recurring ? `<span>${o.recurring ? icon('repeat', 'icon mini') : ''}${esc(o.location || '')}</span>` : ''}</span>
+  </button>`;
+}
+
+// Dagen met afspraken in [from, to); vandaag altijd.
+function listDays(from, to) {
+  const evs = list.items.filter((o) => !state.hidden.has(o.calendar_id) && calById(o.calendar_id));
+  const today = startOfDay(new Date());
+  let html = '';
+  let month = +from === +list.from ? -1 : list.month;
+  for (let d = from; d < to; d = addDays(d, 1)) {
+    const next = addDays(d, 1);
+    const items = evs.filter((o) => o.startD < next && (o.endD > d || (+o.endD === +o.startD && o.startD >= d)))
+      .filter((o) => sameDay(o.startD, d) || +d === +from || o.allDay || d - startOfDay(o.startD) < 7 * 864e5);
+    const isToday = sameDay(d, today);
+    if (!items.length && !isToday) continue;
+    if (d.getMonth() !== month && !(isToday && +d === +list.from)) {
+      html += `<h3 class="lmonth">${MONTHS[d.getMonth()]}${d.getFullYear() !== today.getFullYear() ? ` ${d.getFullYear()}` : ''}</h3>`;
+    }
+    month = d.getMonth();
+    const [a, b] = dayLabel(d);
+    html += `<section class="lday ${isToday ? 'today' : ''} ${d < today ? 'past' : ''}" data-lday="${ymd(d)}">
+      <button type="button" class="lhead" data-day="${ymd(d)}"><span class="ldn">${d.getDate()}</span><span class="lname"><strong>${esc(a)}</strong>${b ? `<span>${esc(b)}</span>` : ''}</span></button>
+      ${items.length ? items.map((o) => listRow(o, d)).join('') : '<p class="lempty">Niets gepland</p>'}
+    </section>`;
+  }
+  list.month = month;
+  return html;
+}
+
+function listFooter() {
+  if (list.ended) return '<div class="lend" id="listEnd"><p>Geen afspraken meer in het komende jaar.</p><button type="button" class="btn press" id="listGoOn">Verder kijken</button></div>';
+  return '<div class="lend" id="listEnd"><span class="spinner"></span></div>';
+}
+
+function renderList() {
+  return `<div class="alist" id="scroller">
+    <div class="lstart"><button type="button" class="btn press" id="listEarlier">${icon('left', 'icon up')} Eerdere afspraken</button></div>
+    <div id="listBody">${listDays(list.from, list.to > list.from ? list.to : addDays(list.from, 1))}</div>
+    ${listFooter()}
+  </div>`;
+}
+
+function appendList(from, to) {
+  const body = $('#listBody');
+  if (!body) return;
+  body.insertAdjacentHTML('beforeend', listDays(from, to));
+  $('#listEnd').outerHTML = listFooter();
+  listObserve();
+}
+
 // ---------- Selectie ----------
 
 function select(id) {
   state.selected = id;
   $$('#board [data-occ]').forEach((el) => el.classList.toggle('sel', el.dataset.occ === id));
   renderDetail();
+}
+
+// ---------- Verslepen ----------
+// Muis: meteen slepen. Aanraken: even vasthouden, dan slepen. Onderrand = langer/korter maken.
+
+const SNAP = 15;
+let drag = null;
+let swallowClick = false;
+
+const occOf = (el) => state.events.find((x) => occId(x) === el?.dataset.occ);
+
+function dragStart(el, x, y, touch) {
+  const o = occOf(el);
+  if (!o?.can_write) return false;
+  const monthChip = !!el.closest('.mcell');
+  const col = el.closest('.tg-col');
+  if (!monthChip && !col) return false;
+  const r = el.getBoundingClientRect();
+  const resize = !monthChip && y > r.bottom - (touch ? 16 : 8);
+  drag = {
+    el, o, x, y, touch, resize, month: monthChip, active: false,
+    grab: y - r.top,
+    day: parseYmd((col || el.closest('.mcell')).dataset[col ? 'col' : 'mcell']),
+    ns: o.startD, ne: o.endD
+  };
+  return true;
+}
+
+function dragActivate() {
+  drag.active = true;
+  drag.el.classList.add('dragging');
+  document.documentElement.classList.add('is-dragging');
+  haptic('tick');
+  if (!drag.month) autoScroll();
+}
+
+function dragMove(x, y) {
+  drag.lx = x;
+  drag.ly = y;
+  const under = document.elementFromPoint(x, y);
+  if (drag.month) {
+    const cell = under?.closest('[data-mcell]');
+    $$('.mcell.drop').forEach((c) => c !== cell && c.classList.remove('drop'));
+    if (!cell) return;
+    cell.classList.add('drop');
+    const delta = Math.round((parseYmd(cell.dataset.mcell) - drag.day) / 864e5);
+    drag.ns = addDays(drag.o.startD, delta);
+    drag.ne = addDays(drag.o.endD, delta);
+    if (!drag.o.allDay) {
+      drag.ns = new Date(drag.ns.setHours(drag.o.startD.getHours(), drag.o.startD.getMinutes()));
+      drag.ne = new Date(drag.ns.getTime() + (drag.o.endD - drag.o.startD));
+    }
+    return;
+  }
+  const col = under?.closest('.tg-col') || drag.el.parentElement;
+  const rect = col.getBoundingClientRect();
+  const day = parseYmd(col.dataset.col);
+  const dur = drag.o.endD - drag.o.startD;
+  const at = (min) => new Date(day.getFullYear(), day.getMonth(), day.getDate(), 0, min);
+  if (drag.resize) {
+    const startMin = (drag.o.startD - day) / 6e4;
+    let end = Math.round(((y - rect.top) / HOUR) * 60 / SNAP) * SNAP;
+    end = Math.min(1440, Math.max(end, Math.max(startMin, 0) + SNAP));
+    drag.ne = at(end);
+    drag.ns = drag.o.startD;
+    drag.el.style.height = `${Math.max(((end - Math.max(startMin, 0)) / 60) * HOUR - 3, 20)}px`;
+  } else {
+    const durMin = Math.round(dur / 6e4);
+    let start = Math.round(((y - drag.grab - rect.top) / HOUR) * 60 / SNAP) * SNAP;
+    start = Math.min(Math.max(start, 0), 1440 - Math.min(durMin, 1440 - SNAP) );
+    drag.ns = at(start);
+    drag.ne = new Date(drag.ns.getTime() + dur);
+    if (drag.el.parentElement !== col) col.append(drag.el);
+    Object.assign(drag.el.style, { top: `${(start / 60) * HOUR + 1}px`, left: '3px', width: 'calc(100% - 6px)' });
+  }
+  const s = drag.el.querySelector('.s');
+  if (s) s.textContent = `${hm(drag.ns)} – ${hm(drag.ne)}`;
+}
+
+// Bij de boven- of onderrand vanzelf meescrollen.
+function autoScroll() {
+  if (!drag?.active) return;
+  const sc = $('#scroller');
+  if (sc && drag.ly != null) {
+    const r = sc.getBoundingClientRect();
+    const top = r.top + (isApp ? parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--app-top')) || 0 : 0) + 60;
+    const bottom = r.bottom - (isApp ? 110 : 0) - 30;
+    const v = drag.ly < top ? -Math.min(14, (top - drag.ly) / 3) : drag.ly > bottom ? Math.min(14, (drag.ly - bottom) / 3) : 0;
+    if (v) {
+      sc.scrollTop += v;
+      dragMove(drag.lx, drag.ly);
+    }
+  }
+  requestAnimationFrame(autoScroll);
+}
+
+function dragEnd(cancel = false) {
+  const d = drag;
+  drag = null;
+  if (!d) return;
+  document.documentElement.classList.remove('is-dragging');
+  $$('.mcell.drop').forEach((c) => c.classList.remove('drop'));
+  if (!d.active) return;
+  swallowClick = true;
+  setTimeout(() => { swallowClick = false; }, 0);
+  const changed = +d.ns !== +d.o.startD || +d.ne !== +d.o.endD;
+  if (cancel || !changed) {
+    renderBoard();
+    return;
+  }
+  commitMove(d.o, d.ns, d.ne);
+}
+
+async function commitMove(o, ns, ne) {
+  const fmt = (d) => (o.allDay ? ymd(d) : `${ymd(d)}T${hm2(d)}`);
+  const body = { move: true, allDay: o.allDay, start: fmt(ns), end: fmt(ne), tz: Intl.DateTimeFormat().resolvedOptions().timeZone };
+  if (o.recurring) body.occurrence = o.key;
+  Object.assign(o, { startD: ns, endD: ne });
+  renderBoard();
+  renderDetail();
+  haptic('confirm');
+  try {
+    await api(`events/${o.id}`, { method: 'PATCH', body });
+    toast(o.recurring ? 'Alleen deze keer verplaatst' : 'Afspraak verplaatst');
+  } catch (err) {
+    toast(err.message);
+  }
+  refresh().then(nativeSync);
+}
+
+function setupDrag(board) {
+  // Muis
+  board.addEventListener('mousedown', (e) => {
+    if (e.button !== 0) return;
+    const el = e.target.closest('[data-occ]');
+    if (!el || !dragStart(el, e.clientX, e.clientY, false)) return;
+    e.preventDefault();
+    const move = (ev) => {
+      if (!drag) return;
+      if (!drag.active && Math.hypot(ev.clientX - drag.x, ev.clientY - drag.y) > 4) dragActivate();
+      if (drag.active) dragMove(ev.clientX, ev.clientY);
+    };
+    const up = () => {
+      removeEventListener('mousemove', move);
+      removeEventListener('mouseup', up);
+      dragEnd();
+    };
+    addEventListener('mousemove', move);
+    addEventListener('mouseup', up);
+  });
+  addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && drag?.active) dragEnd(true);
+  });
+
+  // Aanraken: 350 ms vasthouden
+  let timer = null;
+  board.addEventListener('touchstart', (e) => {
+    if (e.touches.length !== 1) return;
+    const t = e.touches[0];
+    const el = e.target.closest('[data-occ]');
+    if (!el || !dragStart(el, t.clientX, t.clientY, true)) return;
+    timer = setTimeout(() => {
+      timer = null;
+      if (drag) dragActivate();
+    }, 350);
+  }, { passive: true });
+  board.addEventListener('touchmove', (e) => {
+    if (!drag) return;
+    const t = e.touches[0];
+    if (!drag.active) {
+      if (Math.hypot(t.clientX - drag.x, t.clientY - drag.y) > 8) {
+        clearTimeout(timer);
+        drag = null;
+      }
+      return;
+    }
+    e.preventDefault();
+    dragMove(t.clientX, t.clientY);
+  }, { passive: false });
+  const stop = (cancel) => () => {
+    clearTimeout(timer);
+    dragEnd(cancel);
+  };
+  board.addEventListener('touchend', stop(false));
+  board.addEventListener('touchcancel', stop(true));
+  board.addEventListener('contextmenu', (e) => {
+    if (e.target.closest('[data-occ]')) e.preventDefault();
+  });
+  board.addEventListener('click', (e) => {
+    if (swallowClick) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
+  }, true);
 }
 
 // ---------- Navigatie ----------
@@ -463,7 +883,10 @@ function go(dir) {
 function setView(v) {
   if (v === state.view) return;
   state.view = v;
-  store.set('view', v);
+  if (v !== 'list') {
+    state.calView = v;
+    store.set('view', v);
+  }
   state.miniMonth = null;
   state.resetScroll = true;
   load({ animate: true });
@@ -472,8 +895,10 @@ function setView(v) {
 function gotoDay(s, view = 'day') {
   state.cursor = parseYmd(s);
   state.miniMonth = null;
+  if (view === 'list') view = state.calView;
   if (view !== state.view) {
     state.view = view;
+    state.calView = view;
     store.set('view', view);
   }
   state.resetScroll = true;
@@ -505,10 +930,96 @@ function setAllDay(on) {
   $$('.timed', form).forEach((el) => { el.hidden = on; });
 }
 
-function setRepeat(value) {
+// ---------- Herhaling ----------
+
+const WD_ORDER = ['MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU'];
+const WD_NL = { MO: 'ma', TU: 'di', WE: 'wo', TH: 'do', FR: 'vr', SA: 'za', SU: 'zo' };
+const WD_OF = (d) => WD_ORDER[(d.getDay() + 6) % 7];
+const FREQ_NL = { DAILY: ['dag', 'dagen'], WEEKLY: ['week', 'weken'], MONTHLY: ['maand', 'maanden'], YEARLY: ['jaar', 'jaar'] };
+const ORD_NL = ['eerste', 'tweede', 'derde', 'vierde', 'vijfde'];
+const isWorkdays = (r) => r.freq === 'WEEKLY' && r.interval === 1 && r.end === 'never' && r.byday.join() === 'MO,TU,WE,TH,FR';
+
+// value: none/daily/weekly/monthly/yearly/workdays/rule, of 'custom' (te ingewikkeld: ongemoeid laten).
+function setRepeat(value, rule = null) {
   form.repeat.querySelector('option[value="custom"]')?.remove();
-  if (value === 'custom') form.repeat.insertAdjacentHTML('beforeend', '<option value="custom">Aangepast (ingesteld op ander apparaat)</option>');
+  if (rule && value === 'custom') {
+    if (!rule.editable) form.repeat.insertAdjacentHTML('beforeend', '<option value="custom">Aangepast (ingesteld op ander apparaat)</option>');
+    else value = isWorkdays(rule) ? 'workdays' : 'rule';
+  } else if (value === 'custom') {
+    form.repeat.insertAdjacentHTML('beforeend', '<option value="custom">Aangepast (ingesteld op ander apparaat)</option>');
+  }
   form.repeat.value = value || 'none';
+  if (value === 'rule') fillRule(rule);
+  showRule();
+}
+
+function ruleStart() {
+  return form.startDate.value ? parseYmd(form.startDate.value) : new Date();
+}
+
+function monthlyOptions() {
+  const d = ruleStart();
+  const n = Math.ceil(d.getDate() / 7);
+  const last = d.getDate() + 7 > new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+  const cur = form.ruleMonthly.value;
+  form.ruleMonthly.innerHTML = `<option value="day">dag ${d.getDate()}</option>
+    ${n <= 4 ? `<option value="nth">de ${ORD_NL[n - 1]} ${DAYS[d.getDay()]}</option>` : ''}
+    ${last ? `<option value="last">de laatste ${DAYS[d.getDay()]}</option>` : ''}`;
+  form.ruleMonthly.value = form.ruleMonthly.querySelector(`option[value="${cur}"]`) ? cur : 'day';
+}
+
+function fillRule(rule) {
+  const d = ruleStart();
+  const r = rule || { freq: 'WEEKLY', interval: 1, byday: [WD_OF(d)], monthly: 'day', end: 'never' };
+  form.ruleFreq.value = r.freq;
+  form.ruleInterval.value = r.interval || 1;
+  $$('#ruleDays button').forEach((b) => b.setAttribute('aria-pressed', String((r.byday?.length ? r.byday : [WD_OF(d)]).includes(b.dataset.wd))));
+  monthlyOptions();
+  form.ruleMonthly.value = form.ruleMonthly.querySelector(`option[value="${r.monthly}"]`) ? r.monthly : 'day';
+  form.ruleEnd.value = r.end || 'never';
+  form.ruleUntil.value = r.until || ymd(addDays(d, 90));
+  form.ruleCount.value = r.count || 10;
+}
+
+function showRule() {
+  const on = form.repeat.value === 'rule' && !$('#repeatLabel').hidden;
+  $('#ruleBox').hidden = !on;
+  if (!on) return;
+  const f = form.ruleFreq.value;
+  const n = Math.max(1, parseInt(form.ruleInterval.value, 10) || 1);
+  [...form.ruleFreq.options].forEach((o) => { o.textContent = FREQ_NL[o.value][n > 1 ? 1 : 0]; });
+  $('#ruleDays').hidden = f !== 'WEEKLY';
+  $('#ruleMonthlyRow').hidden = f !== 'MONTHLY';
+  form.ruleUntil.hidden = form.ruleEnd.value !== 'until';
+  form.ruleCount.hidden = form.ruleEnd.value !== 'count';
+  $('#ruleSum').textContent = ruleSummary(collectRule());
+}
+
+function collectRule() {
+  if (form.repeat.value === 'workdays') return { freq: 'WEEKLY', interval: 1, byday: ['MO', 'TU', 'WE', 'TH', 'FR'], end: 'never' };
+  const byday = $$('#ruleDays button[aria-pressed="true"]').map((b) => b.dataset.wd);
+  return {
+    freq: form.ruleFreq.value,
+    interval: Math.max(1, parseInt(form.ruleInterval.value, 10) || 1),
+    byday: byday.length ? byday : [WD_OF(ruleStart())],
+    monthly: form.ruleMonthly.value || 'day',
+    end: form.ruleEnd.value,
+    until: form.ruleUntil.value,
+    count: Math.max(1, parseInt(form.ruleCount.value, 10) || 1)
+  };
+}
+
+function ruleSummary(r) {
+  const unit = FREQ_NL[r.freq][r.interval > 1 ? 1 : 0];
+  let t = r.interval > 1 ? `Elke ${r.interval} ${unit}` : `Elke ${unit}`;
+  if (r.freq === 'WEEKLY') t += ` op ${WD_ORDER.filter((w) => r.byday.includes(w)).map((w) => WD_NL[w]).join(', ')}`;
+  if (r.freq === 'MONTHLY') t += ` op ${form.ruleMonthly.selectedOptions[0]?.textContent || ''}`;
+  if (r.end === 'until' && r.until) {
+    const u = parseYmd(r.until);
+    t += `, tot en met ${u.getDate()} ${MONTHS[u.getMonth()]} ${u.getFullYear()}`;
+  }
+  if (r.end === 'count') t += `, ${r.count} keer`;
+  return `${t}.`;
 }
 
 function setAlarm(value) {
@@ -544,7 +1055,6 @@ function openNew(date, minutes, allDay = false) {
   form.calendar.disabled = false;
   $('#roNote').hidden = true;
   fillCalendarSelect(def.id);
-  setRepeat('none');
   setAlarm(15);
   const start = new Date(date.getFullYear(), date.getMonth(), date.getDate(), Math.floor(minutes / 60), minutes % 60);
   const end = new Date(start.getTime() + 3600e3);
@@ -553,6 +1063,7 @@ function openNew(date, minutes, allDay = false) {
   form.endDate.value = ymd(end);
   form.endTime.value = hm2(end);
   setAllDay(allDay);
+  setRepeat('none');
   lastStart = start;
   openDialog();
 }
@@ -592,6 +1103,7 @@ function setScope(scope, refill = true) {
   const ev = editing.ev;
   if (refill) fillFields(scope === 'this' ? ev.occurrence : ev);
   $('#repeatLabel').hidden = scope === 'this';
+  showRule();
   form.calendar.disabled = scope === 'this';
   $('#recurNote').textContent = scope === 'this'
     ? 'Je wijzigt alleen deze ene afspraak; de rest van de reeks blijft zoals hij is.'
@@ -635,7 +1147,7 @@ async function openEdit(id, key) {
   editing = { id: ev.id, readOnly: !ev.can_write, ev, scope: 'all', token, dirty };
   if (dirty) {
     // Gebruiker typt al: alleen aanvullen wat nog ontbrak.
-    setRepeat(ev.repeat);
+    setRepeat(ev.repeat, ev.rule);
     if (form.alarm.value === '') setAlarm(ev.alarm);
     const recurring = !!ev.occurrence && ev.can_write;
     $('#recurNote').hidden = !recurring;
@@ -654,10 +1166,10 @@ async function openEdit(id, key) {
   $('#scopeSeg').hidden = !recurring;
   $('#roNote').hidden = ev.can_write;
   fillCalendarSelect(ev.calendar_id, true);
-  setRepeat(ev.repeat);
   if (!occ) openDialog();
   if (recurring) setScope('this');
   else fillFields(ev.occurrence || ev);
+  setRepeat(ev.repeat, ev.rule);
 }
 
 function formStart() {
@@ -683,6 +1195,9 @@ async function save(e) {
   const allDay = form.allDay.checked;
   if (!form.startDate.value || !form.endDate.value) return showError($('#dlgError'), 'Vul een begin- en einddatum in.');
   let start, end;
+  if (form.repeat.value === 'rule' && !$('#ruleBox').hidden && form.ruleEnd.value === 'until' && form.ruleUntil.value < form.startDate.value) {
+    return showError($('#dlgError'), 'De herhaling stopt voordat de afspraak begint.');
+  }
   if (allDay) {
     if (form.endDate.value < form.startDate.value) return showError($('#dlgError'), 'De einddatum ligt voor de begindatum.');
     start = form.startDate.value;
@@ -703,12 +1218,14 @@ async function save(e) {
     end,
     tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
     repeat: form.repeat.value,
+    ...(['rule', 'workdays'].includes(form.repeat.value) ? { repeat: 'rule', rule: collectRule() } : {}),
     alarm: form.alarm.value === '' ? 'none' : Number(form.alarm.value)
   };
   if (editing?.scope === 'this') {
     body.scope = 'this';
     body.occurrence = editing.ev.occurrence.key;
     delete body.repeat;
+    delete body.rule;
     delete body.calendar_id;
   }
   const btn = $('#dlgSave');
@@ -947,11 +1464,15 @@ async function init() {
 
   $('#prev').addEventListener('click', () => go(-1));
   $('#next').addEventListener('click', () => go(1));
-  $('#today').addEventListener('click', () => gotoDay(ymd(new Date()), state.view));
+  $('#today').addEventListener('click', () => {
+    if (state.view !== 'list') return gotoDay(ymd(new Date()), state.view);
+    const el = $('.lday.today');
+    $('#scroller')?.scrollTo({ top: el ? el.offsetTop - (parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--app-top')) || 0) - 8 : 0, behavior: 'smooth' });
+  });
   $$('#viewSeg button').forEach((b) => b.addEventListener('click', () => setView(b.dataset.view)));
   const newHere = () => {
     const now = new Date();
-    const base = sameDay(state.cursor, now) || state.view !== 'day' && now >= range()[0] && now < range()[1] ? now : state.cursor;
+    const base = state.view === 'list' || sameDay(state.cursor, now) || state.view !== 'day' && now >= range()[0] && now < range()[1] ? now : state.cursor;
     openNew(base, sameDay(base, now) ? Math.min(23 * 60, (now.getHours() + 1) * 60) : 9 * 60);
   };
   $('#newBtn').addEventListener('click', newHere);
@@ -1036,11 +1557,20 @@ async function init() {
   });
 
   const board = $('#board');
+  setupDrag(board);
   board.addEventListener('click', (e) => {
+    if (e.target.closest('#listEarlier')) return listEarlier();
+    if (e.target.closest('#listGoOn')) {
+      list.ended = false;
+      list.empty = 0;
+      $('#listEnd').outerHTML = listFooter();
+      listObserve();
+      return listMore();
+    }
     const occ = e.target.closest('[data-occ]');
     if (occ) {
       select(occ.dataset.occ);
-      if (narrow.matches) openEdit(...occ.dataset.occ.split('|'));
+      if (narrow.matches || state.view === 'list') openEdit(...occ.dataset.occ.split('|'));
       return;
     }
     const sd = e.target.closest('[data-strip]');
@@ -1072,7 +1602,28 @@ async function init() {
 
   form.addEventListener('submit', save);
   form.allDay.addEventListener('change', () => setAllDay(form.allDay.checked));
-  form.startDate.addEventListener('change', shiftEnd);
+  form.startDate.addEventListener('change', () => {
+    shiftEnd();
+    monthlyOptions();
+    showRule();
+  });
+  form.repeat.addEventListener('change', () => {
+    if (form.repeat.value === 'rule') fillRule(null);
+    showRule();
+  });
+  for (const n of ['ruleFreq', 'ruleInterval', 'ruleMonthly', 'ruleEnd', 'ruleUntil', 'ruleCount']) {
+    form[n].addEventListener('input', showRule);
+    form[n].addEventListener('change', showRule);
+  }
+  $('#ruleDays').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-wd]');
+    if (!b) return;
+    const on = b.getAttribute('aria-pressed') !== 'true';
+    if (!on && $$('#ruleDays button[aria-pressed="true"]').length === 1) return;
+    b.setAttribute('aria-pressed', String(on));
+    if (editing) editing.dirty = true;
+    showRule();
+  });
   form.startTime.addEventListener('change', shiftEnd);
   $('#dlgCancel').addEventListener('click', () => dlg.close());
   $('#dlgClose').addEventListener('click', () => dlg.close());
@@ -1092,6 +1643,7 @@ async function init() {
   setInterval(() => {
     if (document.visibilityState === 'visible') load({ cals: true });
   }, 60000);
+  if (isApp) listReset();
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') load({ cals: true });
   });
@@ -1101,6 +1653,10 @@ async function init() {
 
   // Terugknop van de Android-app: eerst sluiten wat open staat.
   window.agendaBack = () => {
+    if (isApp && !$('#viewPick').hidden) {
+      togglePick(false);
+      return true;
+    }
     if (isApp && $('#moreDlg').open) {
       $('#moreDlg').close();
       return true;
@@ -1121,6 +1677,10 @@ async function init() {
       closeSearch();
       return true;
     }
+    if (isApp && state.view !== 'list') {
+      setView('list');
+      return true;
+    }
     return false;
   };
 
@@ -1128,9 +1688,38 @@ async function init() {
 
   state.resetScroll = true;
   await load({ animate: true, cals: true });
+
+  // Vanuit de widget van de app: een afspraak openen of meteen een nieuwe maken.
+  window.agendaOpen = (id, key) => openEdit(id, key);
+  window.agendaNew = () => newHere();
+  const q = new URLSearchParams(location.search);
+  if (q.has('open') || q.has('nieuw')) {
+    history.replaceState(null, '', '/');
+    if (q.has('nieuw')) newHere();
+    else {
+      const [id, key] = q.get('open').split('-');
+      if (/^\d+$/.test(id) && /^\d+$/.test(key)) openEdit(id, key);
+    }
+  }
 }
 
 // ---------- Android-app ----------
+
+function togglePick(open) {
+  const pick = $('#viewPick');
+  if (!pick) return;
+  const show = open ?? pick.hidden;
+  pick.hidden = !show;
+  if (show) {
+    // Boven de Agenda-knop, maar binnen het scherm.
+    const nav = pick.parentElement.getBoundingClientRect();
+    const btn = $('#appnavPill [data-nav="agenda"]').getBoundingClientRect();
+    const half = pick.offsetWidth / 2;
+    const x = Math.min(Math.max(btn.left + btn.width / 2, half + 12), innerWidth - half - 12);
+    pick.style.setProperty('--pick-x', `${x - nav.left}px`);
+  }
+  $('#appnavPill [data-nav="agenda"]')?.setAttribute('aria-expanded', String(show));
+}
 
 function setupApp(newHere) {
   $$('#appnavPill [data-icon]').forEach((el) => { el.outerHTML = icon(el.dataset.icon); });
@@ -1150,7 +1739,11 @@ function setupApp(newHere) {
     if (!b) return;
     haptic();
     const nav = b.dataset.nav;
-    if (nav === 'search') {
+    if (nav !== 'agenda') togglePick(false);
+    if (nav === 'agenda') {
+      closeSearch();
+      togglePick();
+    } else if (nav === 'search') {
       if (document.documentElement.classList.contains('searching')) closeSearch();
       else openSearch();
     } else if (nav === 'more') {
@@ -1160,6 +1753,19 @@ function setupApp(newHere) {
       closeSearch();
       setView(nav);
     }
+  });
+  $$('#viewPick [data-icon]').forEach((el) => { el.outerHTML = icon(el.dataset.icon); });
+  $('#viewPick').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-pick]');
+    if (!b) return;
+    haptic();
+    togglePick(false);
+    if (b.dataset.pick === state.view) return;
+    if (state.view === 'list') state.cursor = startOfDay(new Date());
+    setView(b.dataset.pick);
+  });
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('#viewPick') && !e.target.closest('[data-nav="agenda"]')) togglePick(false);
   });
   $('#appnavAdd').addEventListener('click', () => {
     haptic();
@@ -1178,6 +1784,7 @@ function setupApp(newHere) {
     st = Date.now();
   }, { passive: true });
   board.addEventListener('touchend', (e) => {
+    if (swallowClick || drag || state.view === 'list') return;
     const t = e.changedTouches[0];
     const dx = t.clientX - sx;
     const dy = t.clientY - sy;

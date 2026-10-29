@@ -97,6 +97,103 @@ async function loadCalendars() {
       </div>`).join('')}</div>` : '';
 }
 
+// ---------- Abonneren, importeren, back-up ----------
+
+let allCals = [];
+
+async function loadData() {
+  allCals = await api('calendars');
+  const feeds = await Promise.all(allCals.map((c) => api(`calendars/${c.id}/feed`).then((r) => r.url).catch(() => null)));
+  $('#feedList').innerHTML = allCals.map((c, i) => {
+    const url = feeds[i];
+    return `<div class="row data-row" data-cal="${esc(c.id)}">
+      <span class="dot" style="background:${esc(c.color)}"></span>
+      <div class="grow"><span>${esc(c.name)}</span>${url ? `<span class="small mono feed-url">${esc(url)}</span>` : '<span class="small">Geen link</span>'}</div>
+      <div class="actions">${url ? `
+        <button class="soft press sm" type="button" data-copyfeed="${esc(url)}">Kopieer</button>
+        <a class="soft press sm" href="${esc(url.replace(/^https:/, 'webcal:'))}">Openen</a>
+        <button class="ghost press sm" type="button" data-newfeed>Nieuwe link</button>
+        <button class="ghost press sm danger" type="button" data-stopfeed>Stoppen</button>`
+        : '<button class="btn press sm" type="button" data-newfeed>Link maken</button>'}
+      </div>
+    </div>`;
+  }).join('');
+  const writable = allCals.filter((c) => c.can_write);
+  const cur = $('#impCal').value;
+  $('#impCal').innerHTML = writable.map((c) => `<option value="${esc(c.id)}">${esc(c.name)}${c.is_owner ? '' : ` (${esc(c.owner.full_name)})`}</option>`).join('');
+  if (cur && writable.some((c) => c.id === cur)) $('#impCal').value = cur;
+  $('#expList').innerHTML = allCals.map((c) => `
+    <a class="row data-row dl-one" href="/api/export?calendar=${encodeURIComponent(c.id)}" download>
+      <span class="dot" style="background:${esc(c.color)}"></span>
+      <span class="grow">${esc(c.name)}${c.is_owner ? '' : ` <span class="small">van ${esc(c.owner.full_name)}</span>`}</span>
+      ${icon('download')}
+    </a>`).join('');
+}
+
+// Een .ics in stukjes opdelen (per afspraak-UID), zodat grote bestanden in delen naar de server gaan.
+function splitIcs(text) {
+  const lines = text.replace(/\r\n?/g, '\n').replace(/\n[ \t]/g, '').split('\n');
+  const zones = [];
+  const groups = new Map();
+  let depth = 0;
+  let cur = null;
+  let kind = null;
+  for (const line of lines) {
+    const up = line.toUpperCase();
+    if (up.startsWith('BEGIN:')) {
+      depth++;
+      if (depth === 2) {
+        kind = up.slice(6).trim();
+        cur = [];
+      }
+    }
+    if (cur) cur.push(line);
+    if (up.startsWith('END:')) {
+      if (depth === 2 && cur) {
+        if (kind === 'VTIMEZONE') zones.push(cur.join('\r\n'));
+        else if (kind === 'VEVENT') {
+          const uid = (cur.find((l) => /^UID[:;]/i.test(l)) || '').replace(/^[^:]*:/, '').trim() || `${Math.random()}`;
+          if (!groups.has(uid)) groups.set(uid, []);
+          groups.get(uid).push(cur.join('\r\n'));
+        }
+        cur = null;
+      }
+      depth--;
+    }
+  }
+  const items = [...groups.values()];
+  const chunks = [];
+  for (let i = 0; i < items.length; i += 150) {
+    chunks.push(['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//timvanbergen.nl//Agenda import//NL', ...zones, ...items.slice(i, i + 150).flat(), 'END:VCALENDAR'].join('\r\n'));
+  }
+  return { chunks, total: items.length };
+}
+
+function impStatus(html, kind = '') {
+  const box = $('#impStatus');
+  box.hidden = !html;
+  box.className = `imp-status ${kind}`;
+  box.innerHTML = html;
+}
+
+async function runImport(text) {
+  const calId = $('#impCal').value;
+  if (!calId) return impStatus('Je hebt geen agenda waarin je mag schrijven.', 'err');
+  if (!/BEGIN:VCALENDAR/i.test(text)) return impStatus('Dit is geen agendabestand (.ics).', 'err');
+  const { chunks, total } = splitIcs(text);
+  if (!total) return impStatus('Er staan geen afspraken in dit bestand.', 'err');
+  let added = 0;
+  let skipped = 0;
+  for (let i = 0; i < chunks.length; i++) {
+    impStatus(`<span class="spinner"></span> Importeren… ${Math.min(total, (i + 1) * 150)} van ${total}`);
+    const res = await api(`calendars/${encodeURIComponent(calId)}/import`, { method: 'POST', body: { ics: chunks[i] } });
+    added += res.added;
+    skipped += res.skipped;
+  }
+  const name = allCals.find((c) => c.id === calId)?.name || 'je agenda';
+  impStatus(`${icon('check')} ${added} ${added === 1 ? 'afspraak' : 'afspraken'} in <strong>${esc(name)}</strong> gezet${skipped ? ` (${skipped} overgeslagen)` : ''}.`, 'ok');
+}
+
 // ---------- Beheer ----------
 
 async function loadUsers() {
@@ -259,7 +356,59 @@ async function init() {
     }
   });
 
-  await Promise.all([loadAppPasswords(), loadCalendars()]);
+  $('#icFeed').innerHTML = icon('link');
+  $('#icImport').innerHTML = icon('upload');
+  $('#icBackup').innerHTML = icon('download');
+  $('#expAll').innerHTML = `${icon('download')} Alles downloaden (.zip)`;
+  $('#feedList').addEventListener('click', async (e) => {
+    const cp = e.target.closest('[data-copyfeed]');
+    if (cp) return copy(cp.dataset.copyfeed);
+    const row = e.target.closest('[data-cal]');
+    if (!row) return;
+    const id = encodeURIComponent(row.dataset.cal);
+    try {
+      if (e.target.closest('[data-newfeed]')) {
+        const { url } = await api(`calendars/${id}/feed`, { method: 'POST' });
+        await loadData();
+        copy(url);
+      } else {
+        const stop = e.target.closest('[data-stopfeed]');
+        if (stop && confirmed(stop)) {
+          await api(`calendars/${id}/feed`, { method: 'DELETE' });
+          toast('Link werkt niet meer');
+          loadData();
+        }
+      }
+    } catch (err) {
+      toast(err.message);
+    }
+  });
+  $('#impFile').addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+    if (file.size > 8e6) return impStatus('Dit bestand is te groot (max. 8 MB).', 'err');
+    try {
+      await runImport(await file.text());
+    } catch (err) {
+      impStatus(esc(err.message), 'err');
+    }
+  });
+  $('#impUrlForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const url = e.target.url.value.trim();
+    if (!url) return;
+    impStatus('<span class="spinner"></span> Ophalen…');
+    try {
+      const { ics } = await api('import/fetch', { method: 'POST', body: { url } });
+      await runImport(ics);
+      e.target.reset();
+    } catch (err) {
+      impStatus(esc(err.message), 'err');
+    }
+  });
+
+  await Promise.all([loadAppPasswords(), loadCalendars(), loadData()]);
 
   if (me.is_admin) {
     $('#beheer').hidden = false;

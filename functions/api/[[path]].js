@@ -5,7 +5,8 @@ import {
   clearSessionCookie, sessionUser, tooManyAttempts, recordAttempt, clientIp, newAppPassword,
   normalizeAppPassword, sha256hex, randomToken
 } from '../_lib/util.js';
-import { occurrences, details, buildEvent, patchEvent, excludeOccurrence, overrideOccurrence, zonedToUtc, DEFAULT_TZ } from '../_lib/ical.js';
+import { occurrences, details, buildEvent, patchEvent, excludeOccurrence, overrideOccurrence, buildRrule, zonedToUtc, DEFAULT_TZ } from '../_lib/ical.js';
+import { calendarIcs, importIcs, safeFileName, zip } from '../_lib/export.js';
 import {
   visibleCalendars, requireCalendar, createCalendar, putEvent, deleteEvent
 } from '../_lib/store.js';
@@ -239,7 +240,16 @@ function eventFields(b) {
     const d = new Date(`${b.start}T00:00:00Z`);
     end = new Date(d.getTime() + DAY).toISOString().slice(0, 10);
   }
+  let rrule;
+  if (b.repeat === 'rule') {
+    try {
+      rrule = buildRrule(b.rule, b.start, allDay, str(b.tz, 64) || DEFAULT_TZ);
+    } catch (err) {
+      throw new HttpError(400, err.message);
+    }
+  }
   return {
+    rrule,
     title: str(b.title, 200) || 'Nieuwe afspraak',
     location: str(b.location, 300),
     notes: str(b.notes, 5000),
@@ -247,7 +257,8 @@ function eventFields(b) {
     start: b.start,
     end,
     tz: str(b.tz, 64) || undefined,
-    repeat: ['none', 'daily', 'weekly', 'monthly', 'yearly', 'custom'].includes(b.repeat) ? b.repeat : 'none',
+    repeat: b.repeat === undefined || b.repeat === 'rule' ? undefined
+      : ['none', 'daily', 'weekly', 'monthly', 'yearly', 'custom'].includes(b.repeat) ? b.repeat : 'none',
     alarm: b.alarm === undefined ? undefined : (b.alarm === null || b.alarm === 'none' ? 'none' : Number(b.alarm))
   };
 }
@@ -277,6 +288,16 @@ async function createEventApi(env, user, request) {
 async function updateEventApi(env, user, id, request) {
   const { row } = await loadEvent(env, user, id, true);
   const b = await body(request);
+  if (b.move) {
+    // Verslepen: alleen begin en eind veranderen, de rest blijft zoals het is.
+    const key = occurrenceKey(b.occurrence);
+    const d = details(row.ics, key);
+    const src = key != null && d.occurrence ? d.occurrence : d;
+    const f = eventFields({ title: src.title, location: src.location, notes: src.notes, allDay: b.allDay, start: b.start, end: b.end, tz: b.tz });
+    const ics = key != null && d.occurrence ? overrideOccurrence(row.ics, key, f) : patchEvent(row.ics, f);
+    const res = await putEvent(env, row.calendar_id, row.href, ics, user.id);
+    return json({ id: res.id });
+  }
   if (b.scope === 'this') {
     // Alleen dit ene voorkomen aanpassen: blijft in dezelfde agenda.
     const ics = overrideOccurrence(row.ics, occurrenceKey(b.occurrence), eventFields(b));
@@ -335,6 +356,89 @@ async function searchEvents(env, user, url) {
   const upcoming = out.filter((o) => o.end >= iso.slice(0, o.allDay ? 10 : 24)).sort((a, b) => (a.start < b.start ? -1 : 1));
   const past = out.filter((o) => !upcoming.includes(o)).sort((a, b) => (a.start > b.start ? -1 : 1));
   return json([...upcoming, ...past].slice(0, 25));
+}
+
+// ---------- Abonneren, importeren, back-up ----------
+
+async function getFeed(env, user, calId, url) {
+  await requireCalendar(env, user.id, calId);
+  const row = await env.DB.prepare('SELECT token FROM feeds WHERE calendar_id = ? AND user_id = ?').bind(calId, user.id).first();
+  return json({ url: row ? `${url.origin}/ics/${row.token}.ics` : null });
+}
+
+async function newFeed(env, user, calId, url) {
+  await requireCalendar(env, user.id, calId);
+  const token = randomToken(24);
+  await env.DB.prepare(
+    'INSERT INTO feeds (token, calendar_id, user_id, created_at) VALUES (?, ?, ?, ?) ON CONFLICT (calendar_id, user_id) DO UPDATE SET token = excluded.token, created_at = excluded.created_at'
+  ).bind(token, calId, user.id, now()).run();
+  return json({ url: `${url.origin}/ics/${token}.ics` }, 201);
+}
+
+async function removeFeed(env, user, calId) {
+  await env.DB.prepare('DELETE FROM feeds WHERE calendar_id = ? AND user_id = ?').bind(calId, user.id).run();
+  return json({ ok: true });
+}
+
+async function importApi(env, user, calId, request) {
+  await requireCalendar(env, user.id, calId, true);
+  const b = await body(request);
+  if (typeof b.ics !== 'string' || !b.ics.includes('BEGIN:VCALENDAR')) throw new HttpError(400, 'Dit is geen geldig agendabestand (.ics)');
+  return json(await importIcs(env, calId, b.ics, user.id));
+}
+
+// Een .ics van internet ophalen; de browser splitst en importeert hem daarna in stukjes.
+async function fetchIcs(request) {
+  const b = await body(request);
+  let target;
+  try {
+    target = new URL(str(b.url, 2000).replace(/^webcals?:\/\//i, 'https://'));
+  } catch {
+    throw new HttpError(400, 'Ongeldige link');
+  }
+  if (!/^https?:$/.test(target.protocol)) throw new HttpError(400, 'Alleen http- of https-links');
+  let res;
+  try {
+    res = await fetch(target, { headers: { accept: 'text/calendar, */*' }, redirect: 'follow' });
+  } catch {
+    throw new HttpError(502, 'Kon de link niet openen');
+  }
+  if (!res.ok) throw new HttpError(502, `De link gaf een fout (${res.status})`);
+  const text = await res.text();
+  if (text.length > 8e6) throw new HttpError(413, 'Dit bestand is te groot (max. 8 MB)');
+  if (!text.includes('BEGIN:VCALENDAR')) throw new HttpError(400, 'Op deze link staat geen agenda (.ics)');
+  return json({ ics: text });
+}
+
+async function exportApi(env, user, url) {
+  const calId = url.searchParams.get('calendar');
+  const stamp = new Date().toISOString().slice(0, 10);
+  if (calId) {
+    const cal = await requireCalendar(env, user.id, calId);
+    return new Response(await calendarIcs(env, cal), {
+      headers: {
+        'content-type': 'text/calendar; charset=utf-8',
+        'content-disposition': `attachment; filename="${safeFileName(cal.name)} ${stamp}.ics"`,
+        'cache-control': 'no-store'
+      }
+    });
+  }
+  const cals = await visibleCalendars(env, user.id);
+  const files = [];
+  const used = new Set();
+  for (const c of cals) {
+    let name = safeFileName(c.is_owner ? c.name : `${c.name} (${c.owner_name})`);
+    while (used.has(name.toLowerCase())) name += '_';
+    used.add(name.toLowerCase());
+    files.push({ name: `${name}.ics`, text: await calendarIcs(env, c) });
+  }
+  return new Response(zip(files), {
+    headers: {
+      'content-type': 'application/zip',
+      'content-disposition': `attachment; filename="Agenda back-up ${stamp}.zip"`,
+      'cache-control': 'no-store'
+    }
+  });
 }
 
 // ---------- Meldingen voor de app ----------
@@ -482,10 +586,16 @@ async function route(request, env) {
     if (b && !c && m === 'DELETE') return removeCalendar(env, user, b);
     if (b && c === 'shares' && !d && m === 'POST') return addShare(env, user, b, request);
     if (b && c === 'shares' && d && m === 'DELETE') return removeShare(env, user, b, d);
+    if (b && c === 'feed' && m === 'GET') return getFeed(env, user, b, url);
+    if (b && c === 'feed' && m === 'POST') return newFeed(env, user, b, url);
+    if (b && c === 'feed' && m === 'DELETE') return removeFeed(env, user, b);
+    if (b && c === 'import' && m === 'POST') return importApi(env, user, b, request);
   }
 
   if (p === 'search' && m === 'GET') return searchEvents(env, user, url);
   if (p === 'feed' && m === 'GET') return feed(env, user, url);
+  if (p === 'import/fetch' && m === 'POST') return fetchIcs(request);
+  if (p === 'export' && m === 'GET') return exportApi(env, user, url);
 
   if (a === 'events') {
     if (!b && m === 'GET') return listEvents(env, user, url);

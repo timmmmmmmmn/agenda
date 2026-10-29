@@ -71,11 +71,15 @@
 <nav class="appnav" aria-label="Navigatie">
   <div class="appnav-pill" id="appnavPill">
     <span class="appnav-ind" aria-hidden="true"></span>
-    <button type="button" data-nav="day"><span data-icon="day"></span><span>Dag</span></button>
-    <button type="button" data-nav="week"><span data-icon="week"></span><span>Week</span></button>
-    <button type="button" data-nav="month"><span data-icon="month"></span><span>Maand</span></button>
+    <button type="button" data-nav="list"><span data-icon="list"></span><span>Planning</span></button>
+    <button type="button" data-nav="agenda" aria-haspopup="true" aria-expanded="false"><span data-icon="day"></span><span class="lbl">Agenda</span></button>
     <button type="button" data-nav="search"><span data-icon="search"></span><span>Zoeken</span></button>
     <button type="button" data-nav="more"><span data-icon="more"></span><span>Meer</span></button>
+  </div>
+  <div class="viewpick" id="viewPick" role="menu" aria-label="Weergave" hidden>
+    <button type="button" role="menuitem" data-pick="day"><span data-icon="day"></span><span>Dag</span></button>
+    <button type="button" role="menuitem" data-pick="week"><span data-icon="week"></span><span>Week</span></button>
+    <button type="button" role="menuitem" data-pick="month"><span data-icon="month"></span><span>Maand</span></button>
   </div>
   <button type="button" class="primary appnav-add" id="appnavAdd" aria-label="Nieuwe afspraak"></button>
 </nav>
@@ -117,8 +121,46 @@
             <option value="weekly">Elke week</option>
             <option value="monthly">Elke maand</option>
             <option value="yearly">Elk jaar</option>
+            <option value="workdays">Elke werkdag (ma–vr)</option>
+            <option value="rule">Aangepast…</option>
           </select>
         </label>
+      </div>
+      <div class="rule-box" id="ruleBox" hidden>
+        <div class="rule-row">
+          <span>Elke</span>
+          <input class="field rule-n" type="number" name="ruleInterval" min="1" max="999" value="1" inputmode="numeric" aria-label="Hoe vaak">
+          <select class="field" name="ruleFreq" aria-label="Eenheid">
+            <option value="DAILY">dag</option>
+            <option value="WEEKLY">week</option>
+            <option value="MONTHLY">maand</option>
+            <option value="YEARLY">jaar</option>
+          </select>
+        </div>
+        <div class="rule-days" id="ruleDays" role="group" aria-label="Op welke dagen">
+          <button type="button" data-wd="MO" aria-label="maandag">ma</button>
+          <button type="button" data-wd="TU" aria-label="dinsdag">di</button>
+          <button type="button" data-wd="WE" aria-label="woensdag">wo</button>
+          <button type="button" data-wd="TH" aria-label="donderdag">do</button>
+          <button type="button" data-wd="FR" aria-label="vrijdag">vr</button>
+          <button type="button" data-wd="SA" aria-label="zaterdag">za</button>
+          <button type="button" data-wd="SU" aria-label="zondag">zo</button>
+        </div>
+        <div class="rule-row" id="ruleMonthlyRow">
+          <span>Op</span>
+          <select class="field" name="ruleMonthly" aria-label="Welke dag van de maand"></select>
+        </div>
+        <div class="rule-row">
+          <span>Stopt</span>
+          <select class="field" name="ruleEnd" aria-label="Wanneer stopt de herhaling">
+            <option value="never">Nooit</option>
+            <option value="until">Op datum</option>
+            <option value="count">Na aantal keer</option>
+          </select>
+          <input class="field" type="date" name="ruleUntil" aria-label="Laatste datum" hidden>
+          <input class="field rule-n" type="number" name="ruleCount" min="1" max="9999" value="10" inputmode="numeric" aria-label="Aantal keer" hidden>
+        </div>
+        <p class="rule-sum" id="ruleSum"></p>
       </div>
       <label class="form-label"><span>Locatie</span><input class="field" name="location" maxlength="300" placeholder="Adres of online" autocomplete="off"></label>
       <label class="form-label"><span>Melding</span>

@@ -475,11 +475,91 @@ export function details(text, key = null) {
     repeat = simple ? m.rrule.freq.toLowerCase() : 'custom';
   }
   const out = { ...fieldsOf(m, m.startMs, m.durMs), repeat };
+  if (m.rrule) out.rule = describeRule(m);
   if (key != null && m.rrule) {
     const ov = parsed.overrides.find((o) => o.recurrenceId === key);
     out.occurrence = ov ? { ...fieldsOf(ov, ov.startMs, ov.durMs), key } : { ...fieldsOf(m, key, m.durMs), key };
   }
   return out;
+}
+
+// ---------- Herhaling als formulier ----------
+
+const WD_CODE = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'];
+
+// Lokale datum (in de tijdzone van de afspraak) van een tijdstip.
+function localDn(ms, start) {
+  if (start.allDay) return Math.floor(ms / DAY);
+  const tz = start.tz === 'UTC' ? DEFAULT_TZ : start.tz;
+  return Math.floor((ms + tzOffset(ms, tz)) / DAY);
+}
+
+// Hoeveelste (1-5) weekdag van de maand, en of het de laatste is.
+function nthOfMonth(dn) {
+  const { y, m, d } = ymd(dn);
+  return { n: Math.ceil(d / 7), last: d + 7 > daysInMonth(y, m) };
+}
+
+// De RRULE vertaald naar wat het bewerkvenster kan tonen. editable=false: te ingewikkeld,
+// dan laten we hem ongemoeid.
+function describeRule(ev) {
+  const r = ev.rrule;
+  const { d, m, dow } = ymd(ev.start.dn);
+  const out = {
+    freq: r.freq,
+    interval: r.interval,
+    byday: [],
+    monthly: 'day',
+    end: r.count ? 'count' : r.until != null ? 'until' : 'never',
+    count: r.count || null,
+    until: r.until != null ? dateStr(localDn(r.until, ev.start)) : null,
+    editable: true
+  };
+  if (!APPROX_PERIOD[r.freq]) out.editable = false;
+  if (r.bymonth && !(r.freq === 'YEARLY' && r.bymonth.length === 1 && r.bymonth[0] === m)) out.editable = false;
+  if (r.bymonthday && !(r.bymonthday.length === 1 && r.bymonthday[0] === d && r.freq !== 'WEEKLY')) out.editable = false;
+  if (r.byday) {
+    if (r.freq === 'WEEKLY' && r.byday.every((b) => !b.n)) out.byday = r.byday.map((b) => WD_CODE[b.wd]);
+    else if (r.freq === 'MONTHLY' && r.byday.length === 1 && r.byday[0].wd === dow) {
+      const nth = nthOfMonth(ev.start.dn);
+      if (r.byday[0].n === nth.n) out.monthly = 'nth';
+      else if (r.byday[0].n === -1 && nth.last) out.monthly = 'last';
+      else out.editable = false;
+    } else out.editable = false;
+  }
+  if (r.freq === 'WEEKLY' && !out.byday.length) out.byday = [WD_CODE[dow]];
+  return out;
+}
+
+// Formulier -> RRULE-tekst. start: 'YYYY-MM-DD...' (lokale begindatum), tz van de afspraak.
+export function buildRrule(rule, start, allDay, tz) {
+  const freq = String(rule?.freq || '').toUpperCase();
+  if (!APPROX_PERIOD[freq]) throw new Error('Ongeldige herhaling');
+  const interval = Math.min(999, Math.max(1, parseInt(rule.interval, 10) || 1));
+  const parts = [`FREQ=${freq}`];
+  if (interval > 1) parts.push(`INTERVAL=${interval}`);
+  const [y, mo, d] = start.slice(0, 10).split('-').map(Number);
+  const dn = Date.UTC(y, mo - 1, d) / DAY;
+  if (freq === 'WEEKLY') {
+    const days = [...new Set((rule.byday || []).map((x) => String(x).toUpperCase()).filter((x) => WD_CODE.includes(x)))];
+    const order = ['MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU'];
+    if (days.length && !(days.length === 1 && days[0] === WD_CODE[ymd(dn).dow])) {
+      parts.push(`BYDAY=${days.sort((a, b) => order.indexOf(a) - order.indexOf(b)).join(',')}`);
+    }
+  }
+  if (freq === 'MONTHLY' && (rule.monthly === 'nth' || rule.monthly === 'last')) {
+    const code = WD_CODE[ymd(dn).dow];
+    parts.push(`BYDAY=${rule.monthly === 'last' ? -1 : nthOfMonth(dn).n}${code}`);
+  }
+  if (rule.end === 'count') {
+    parts.push(`COUNT=${Math.min(9999, Math.max(1, parseInt(rule.count, 10) || 1))}`);
+  } else if (rule.end === 'until') {
+    const m = String(rule.until || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!m) throw new Error('Ongeldige einddatum van de herhaling');
+    if (allDay) parts.push(`UNTIL=${m[1]}${m[2]}${m[3]}`);
+    else parts.push(`UNTIL=${utcStamp(zonedToUtc(+m[1], +m[2], +m[3], 23, 59, 59, resolveTz(tz || DEFAULT_TZ)))}`);
+  }
+  return parts.join(';');
 }
 
 // ---------- Afspraken schrijven ----------
@@ -545,7 +625,9 @@ function applyFields(cal, ev, f) {
   if ((s.params.TZID || e.params.TZID) && !cal.children.some((c) => c.name === 'VTIMEZONE' && getProp(c, 'TZID')?.value === DEFAULT_TZ)) {
     cal.children.unshift(parseIcs(`BEGIN:VCALENDAR\n${VTIMEZONE_AMS}\nEND:VCALENDAR`).children[0]);
   }
-  if (f.repeat && f.repeat !== 'custom') {
+  if (f.rrule) {
+    setProp(ev, 'RRULE', {}, f.rrule);
+  } else if (f.repeat && f.repeat !== 'custom') {
     if (FREQS[f.repeat]) {
       const cur = getProp(ev, 'RRULE');
       const curFreq = cur && parseRrule(cur.value)?.freq;
