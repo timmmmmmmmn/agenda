@@ -1,6 +1,6 @@
 import { api, $, icon, bindThemeButton, bindPasswordToggle, showError, toast } from './common.js';
 
-$('#brandMark').innerHTML = '<img src="/icons/icon-192.png" alt="">';
+$('#brandMark').innerHTML = '<img src="/icons/icon-192.png?v=3" alt="">';
 bindThemeButton($('#themeBtn'));
 bindPasswordToggle($('#pwToggle'), $('#pw'));
 

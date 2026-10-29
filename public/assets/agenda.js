@@ -817,7 +817,7 @@ const isAndroid = /Android/.test(navigator.userAgent);
 const promo = !isApp && (isIOS || isAndroid) ? (isIOS ? 'ios' : 'android') : null;
 
 function promoHtml() {
-  const img = '<img src="/icons/icon-192.png" alt="">';
+  const img = '<img src="/icons/icon-192.png?v=3" alt="">';
   if (promo === 'android') {
     return `<a class="promo" href="${RELEASES}" target="_blank" rel="noopener">${img}
       <span><strong>Download de Android-app</strong><span>APK van GitHub · werkt zich zelf bij</span></span></a>`;
@@ -937,7 +937,7 @@ async function init() {
   } catch {
     return location.replace('/login');
   }
-  $('#brandMark').innerHTML = '<img src="/icons/icon-192.png" alt="">';
+  $('#brandMark').innerHTML = '<img src="/icons/icon-192.png?v=3" alt="">';
   $('#prev').innerHTML = icon('left');
   $('#next').innerHTML = icon('right');
   $('#newBtn').innerHTML = `${icon('plus')} Nieuwe afspraak`;
