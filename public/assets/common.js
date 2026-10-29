@@ -202,3 +202,8 @@ export function calStyle(hex) {
     ? `--c:${hex};--tint:rgba(${r},${g},${b},.26);--ink:rgb(${mix(255, .72)});--solid:rgb(${mix(0, .12)})`
     : `--c:${hex};--tint:rgba(${r},${g},${b},.17);--ink:rgb(${mix(0, .5)});--solid:rgb(${mix(0, .14)})`;
 }
+
+// Logo met de datum van vandaag (getekend in theme.js).
+export function dateLogo(el) {
+  el.innerHTML = `<img data-datum src="${window.agendaDatumLogo || '/icons/kalender.png?v=1'}" alt="">`;
+}

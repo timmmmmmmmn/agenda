@@ -1,4 +1,4 @@
-import { api, esc, $, $$, icon, toast, showError, initials, calStyle, applyTheme, themePref, isApp, haptic, nativeSync } from './common.js';
+import { api, esc, $, $$, icon, toast, showError, initials, calStyle, applyTheme, themePref, isApp, haptic, nativeSync, dateLogo } from './common.js';
 
 const HOUR = 52;
 const MONTHS = ['januari', 'februari', 'maart', 'april', 'mei', 'juni', 'juli', 'augustus', 'september', 'oktober', 'november', 'december'];
@@ -937,7 +937,7 @@ async function init() {
   } catch {
     return location.replace('/login');
   }
-  $('#brandMark').innerHTML = '<img src="/icons/icon-192.png?v=3" alt="">';
+  dateLogo($('#brandMark'));
   $('#prev').innerHTML = icon('left');
   $('#next').innerHTML = icon('right');
   $('#newBtn').innerHTML = `${icon('plus')} Nieuwe afspraak`;
