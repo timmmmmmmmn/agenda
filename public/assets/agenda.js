@@ -1721,6 +1721,22 @@ function togglePick(open) {
   $('#appnavPill [data-nav="agenda"]')?.setAttribute('aria-expanded', String(show));
 }
 
+// Dag/Week/Maand kiezen: op Android 13+ tekent de app dit menu zelf, anders doet de pagina het.
+function glassPick() {
+  const r = $('#appnavPill [data-nav="agenda"]').getBoundingClientRect();
+  const items = [['day', 'Dag'], ['week', 'Week'], ['month', 'Maand']]
+    .map(([id, title]) => ({ id, title, icon: id, checked: id === state.view }));
+  const dark = document.documentElement.getAttribute('data-theme') === 'donker';
+  return window.AgendaNative?.glassMenu?.(JSON.stringify({ x: r.left, y: r.top, w: r.width, h: r.height, dark, items })) === true;
+}
+
+function pickView(view) {
+  togglePick(false);
+  if (view === state.view) return;
+  if (state.view === 'list') state.cursor = startOfDay(new Date());
+  setView(view);
+}
+
 function setupApp(newHere) {
   $$('#appnavPill [data-icon]').forEach((el) => { el.outerHTML = icon(el.dataset.icon); });
   $('#appnavAdd').innerHTML = icon('plus');
@@ -1742,7 +1758,7 @@ function setupApp(newHere) {
     if (nav !== 'agenda') togglePick(false);
     if (nav === 'agenda') {
       closeSearch();
-      togglePick();
+      if (!glassPick()) togglePick();
     } else if (nav === 'search') {
       if (document.documentElement.classList.contains('searching')) closeSearch();
       else openSearch();
@@ -1759,11 +1775,9 @@ function setupApp(newHere) {
     const b = e.target.closest('[data-pick]');
     if (!b) return;
     haptic();
-    togglePick(false);
-    if (b.dataset.pick === state.view) return;
-    if (state.view === 'list') state.cursor = startOfDay(new Date());
-    setView(b.dataset.pick);
+    pickView(b.dataset.pick);
   });
+  window.agendaGlassPick = pickView;
   document.addEventListener('click', (e) => {
     if (!e.target.closest('#viewPick') && !e.target.closest('[data-nav="agenda"]')) togglePick(false);
   });
