@@ -1,4 +1,4 @@
-import { api, esc, $, $$, icon, toast, showError, initials, calStyle, applyTheme, themePref, isApp, haptic, nativeSync, dateLogo } from './common.js';
+import { api, esc, $, $$, icon, toast, showError, initials, calStyle, applyTheme, themePref, isApp, haptic, nativeSync, dateLogo, glassUi, glassMenu, glassMenuUpdate } from './common.js';
 
 const HOUR = 52;
 const MONTHS = ['januari', 'februari', 'maart', 'april', 'mei', 'juni', 'juli', 'augustus', 'september', 'oktober', 'november', 'december'];
@@ -705,7 +705,7 @@ function dragActivate() {
   drag.active = true;
   drag.el.classList.add('dragging');
   document.documentElement.classList.add('is-dragging');
-  haptic('tick');
+  haptic('long');
   if (!drag.month) autoScroll();
 }
 
@@ -1726,8 +1726,92 @@ function glassPick() {
   const r = $('#appnavPill [data-nav="agenda"]').getBoundingClientRect();
   const items = [['day', 'Dag'], ['week', 'Week'], ['month', 'Maand']]
     .map(([id, title]) => ({ id, title, icon: id, checked: id === state.view }));
+  if (glassUi) return glassMenu($('#appnavPill [data-nav="agenda"]'), items.map((i) => ({ ...i, run: () => pickView(i.id) })));
   const dark = document.documentElement.getAttribute('data-theme') === 'donker';
   return window.AgendaNative?.glassMenu?.(JSON.stringify({ x: r.left, y: r.top, w: r.width, h: r.height, dark, items })) === true;
+}
+
+// Het Meer-paneel als glazen menu: agenda's, thema en account in één lijst.
+function moreItems() {
+  const me = state.me;
+  const row = (selector) => () => $(selector)?.click();
+  const heading = (title) => ({ heading: true, title });
+  const sep = { separator: true };
+  const theme = (pref, title) => ({
+    id: `theme-${pref}`,
+    title,
+    keepOpen: true,
+    checked: themePref() === pref,
+    run: () => {
+      applyTheme(pref);
+      glassMenuUpdate(moreItems());
+    }
+  });
+  const version = (() => {
+    try {
+      return window.AgendaNative.appVersion();
+    } catch {
+      return '';
+    }
+  })();
+  return [
+    heading(`${me.full_name} · @${me.username}`),
+    ...(state.cals.length ? [heading("Agenda's")] : []),
+    ...state.cals.map((c) => ({
+      id: `cal-${c.id}`,
+      title: c.name,
+      color: c.color,
+      keepOpen: true,
+      checked: !state.hidden.has(c.id),
+      run: () => {
+        const box = $(`#calList input[data-cal="${CSS.escape(c.id)}"]`);
+        if (box) {
+          box.checked = !box.checked;
+          box.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+        glassMenuUpdate(moreItems());
+      }
+    })),
+    sep,
+    heading('Weergave'),
+    theme('systeem', 'Systeem'),
+    theme('licht', 'Licht'),
+    theme('donker', 'Donker'),
+    sep,
+    { id: 'settings', title: 'Instellingen en apparaten', run: row('#menu a[href="/instellingen"]') },
+    ...(me.is_admin ? [{ id: 'admin', title: pendingCount ? `Gebruikers beheren (${pendingCount})` : 'Gebruikers beheren', run: row('#menu a[href="/instellingen#beheer"]') }] : []),
+    { id: 'src-web', title: 'Broncode website', run: row('#menu a[href$="/agenda"]') },
+    { id: 'src-app', title: 'Broncode Android-app', run: row('#menu a[href$="/agenda-android"]') },
+    ...(version ? [{ id: 'update', title: 'App bijwerken', subtitle: `Versie ${version}`, run: () => window.AgendaNative.checkForUpdate() }] : []),
+    sep,
+    { id: 'logout', title: 'Uitloggen', destructive: true, run: row('#logout') }
+  ];
+}
+
+// De glazen navigatie staat in de app; de pagina houdt de plek, de tabbladen en de stand bij.
+let barFrame = 0;
+function syncGlassBar() {
+  if (!glassUi || barFrame) return;
+  barFrame = requestAnimationFrame(() => {
+    barFrame = 0;
+    const box = (el) => {
+      const r = el.getBoundingClientRect();
+      return { x: r.left, y: r.top, w: r.width, h: r.height };
+    };
+    const tabs = $$('#appnavPill [data-nav]').map((b) => ({
+      id: b.dataset.nav,
+      title: b.lastElementChild.textContent,
+      icon: b.dataset.nav === 'agenda' ? state.calView : b.dataset.nav
+    }));
+    window.AgendaNative.glassBar(JSON.stringify({
+      pill: box($('#appnavPill')),
+      add: box($('#appnavAdd')),
+      tabs,
+      active: state.view === 'list' ? 'list' : 'agenda',
+      dark: document.documentElement.getAttribute('data-theme') === 'donker',
+      visible: !$('#dlg').open && !$('#moreDlg').open
+    }));
+  });
 }
 
 function pickView(view) {
@@ -1764,7 +1848,7 @@ function setupApp(newHere) {
       else openSearch();
     } else if (nav === 'more') {
       closeSearch();
-      toggleMenu(true);
+      if (!glassMenu(b, moreItems())) toggleMenu(true);
     } else {
       closeSearch();
       setView(nav);
@@ -1777,7 +1861,22 @@ function setupApp(newHere) {
     haptic();
     pickView(b.dataset.pick);
   });
-  window.agendaGlassPick = pickView;
+  if (!glassUi) window.agendaGlassPick = pickView;
+  if (glassUi) {
+    window.agendaGlassNav = (id) => {
+      (id === 'add' ? $('#appnavAdd') : $(`#appnavPill [data-nav="${id}"]`))?.click();
+      if ((id === 'add' || id === 'search') && document.documentElement.classList.contains(id === 'search' ? 'searching' : 'app')) {
+        setTimeout(() => window.AgendaNative.showKeyboard(), 90);
+      }
+    };
+    addEventListener('resize', syncGlassBar);
+    const watch = new MutationObserver(syncGlassBar);
+    watch.observe($('#dlg'), { attributes: true, attributeFilter: ['open'] });
+    watch.observe($('#moreDlg'), { attributes: true, attributeFilter: ['open'] });
+    watch.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    watch.observe($('#appnavPill'), { subtree: true, childList: true, attributes: true, attributeFilter: ['aria-current'] });
+    syncGlassBar();
+  }
   document.addEventListener('click', (e) => {
     if (!e.target.closest('#viewPick') && !e.target.closest('[data-nav="agenda"]')) togglePick(false);
   });

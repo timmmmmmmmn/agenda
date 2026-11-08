@@ -59,11 +59,85 @@ export const icon = (name, cls = 'icon') => `<svg class="${cls}" viewBox="0 0 24
 
 export const isApp = document.documentElement.classList.contains('app');
 
-// Korte trilling in de app ('tick' bij tikken, 'confirm' bij opslaan/verwijderen).
+// Korte trilling in de app ('tick' bij tikken, 'confirm' bij opslaan/verwijderen,
+// 'reject' bij een fout, 'long' bij lang indrukken).
+let lastHaptic = 0;
 export function haptic(kind = 'tick') {
+  const now = Date.now();
+  // Eén tik levert soms twee meldingen op (algemeen én specifiek): de sterkste geldt.
+  if (kind === 'tick' && now - lastHaptic < 60) return;
+  lastHaptic = now;
   try {
     window.AgendaNative?.haptic(kind);
   } catch {}
+}
+
+// ---------- Glazen vormgeving (alleen Android-app, Android 13+) ----------
+
+export const glassUi = document.documentElement.classList.contains('glass');
+const boxOf = (el) => {
+  const r = el.getBoundingClientRect();
+  return { x: r.left, y: r.top, w: r.width, h: r.height };
+};
+let glassPicks = new Map();
+
+const glassPayload = (items) => {
+  glassPicks = new Map(items.filter((i) => i.run).map((i) => [i.id, i.run]));
+  return items.map(({ run, ...rest }) => rest);
+};
+
+// Opent een native glazen menu dat uit `el` groeit. items: { id, title, run, checked, keepOpen, ... }.
+export function glassMenu(el, items) {
+  if (!glassUi) return false;
+  return window.AgendaNative.glassMenu(JSON.stringify({ ...boxOf(el), dark: isDark(), items: glassPayload(items) }));
+}
+
+// Andere rijen terwijl het menu open staat.
+export function glassMenuUpdate(items) {
+  if (glassUi) window.AgendaNative.glassMenuItems(JSON.stringify({ dark: isDark(), items: glassPayload(items) }));
+}
+
+if (glassUi) {
+  const oldPick = window.agendaGlassPick;
+  window.agendaGlassPick = (id) => (glassPicks.has(id) ? glassPicks.get(id)() : oldPick?.(id));
+
+  // Keuzelijsten: het glazen menu in plaats van het systeemvenster.
+  const openSelect = (s) => {
+    const items = [...s.options].map((o, i) => ({
+      id: String(i),
+      title: o.textContent,
+      disabled: o.disabled,
+      checked: i === s.selectedIndex,
+      run: () => {
+        s.selectedIndex = i;
+        s.dispatchEvent(new Event('input', { bubbles: true }));
+        s.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+    }));
+    document.activeElement?.blur?.();
+    glassMenu(s, items);
+  };
+  document.addEventListener('mousedown', (e) => {
+    const s = e.target.closest?.('select');
+    if (!s || s.disabled) return;
+    e.preventDefault();
+    haptic();
+    openSelect(s);
+  }, true);
+  document.addEventListener('keydown', (e) => {
+    const s = e.target;
+    if (s.tagName === 'SELECT' && !s.disabled && (e.key === 'Enter' || e.key === ' ')) {
+      e.preventDefault();
+      openSelect(s);
+    }
+  }, true);
+}
+
+// Elke tik op iets wat je kunt bedienen voelt in de app als een knop.
+if (window.AgendaNative) {
+  document.addEventListener('click', (e) => {
+    if (e.target.closest?.('button, a, label, summary, select, input[type="checkbox"], input[type="radio"], [data-occ], [data-goto], .lrow, .lhead, .mcell')) haptic();
+  }, true);
 }
 
 // De app laten weten dat afspraken veranderd zijn (herinneringen opnieuw inplannen).
@@ -139,6 +213,7 @@ export function toast(message) {
 }
 
 export function showError(box, message) {
+  haptic('reject');
   box.textContent = message;
   box.hidden = false;
   box.style.animation = 'none';
