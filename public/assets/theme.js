@@ -25,7 +25,7 @@
       root.style.setProperty('--sat', i[0] + 'px');
       root.style.setProperty('--sab', i[1] + 'px');
       window.AgendaNative.setDark(dark);
-      // Alleen in de Android-app op Android 13+: de glazen vormgeving (zie html.glass in app.css).
+      // Alleen in de Android-app op Android 13+: glazen navigatie en menu's (zie html.glass in app.css).
       if (window.AgendaNative.glassUi && window.AgendaNative.glassUi()) root.classList.add('glass');
     } catch (e) {}
   }

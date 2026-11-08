@@ -843,77 +843,8 @@ html.app .auth-card h1, html.app .settings-head h1 { font-family: var(--font-num
 .topbar .avatar { width: 34px; height: 34px; border: 0; box-shadow: none; font-size: 13px; background: var(--accent-soft); color: var(--accent-ink); }
 .topbar .menu { top: 44px; }
 
-/* ======================================================================
-   Vloeibaar glas: alleen in de Android-app (Android 13+). De navigatie en de menu's
-   tekent de app zelf; hier krijgen de panelen met formulieren hetzelfde gezicht.
-   ====================================================================== */
-
-html.glass {
-  --glass-fill: rgba(252, 252, 253, .74);
-  --glass-soft: rgba(255, 255, 255, .42);
-  --glass-rim: inset 0 1px 0 rgba(255, 255, 255, .85), inset 0 0 0 .5px rgba(255, 255, 255, .55), inset 0 -1px 1px rgba(255, 255, 255, .25);
-  --glass-shadow: 0 12px 34px rgba(11, 13, 16, .16), 0 1px 3px rgba(11, 13, 16, .08);
-  --glass-blur: blur(26px) saturate(180%);
-}
-html.glass[data-theme="donker"] {
-  --glass-fill: rgba(24, 26, 30, .62);
-  --glass-soft: rgba(255, 255, 255, .08);
-  --glass-rim: inset 0 1px 0 rgba(255, 255, 255, .28), inset 0 0 0 .5px rgba(255, 255, 255, .14), inset 0 -1px 1px rgba(255, 255, 255, .06);
-  --glass-shadow: 0 12px 34px rgba(0, 0, 0, .5), 0 1px 3px rgba(0, 0, 0, .3);
-}
-
-/* De navigatie blijft voor de plek en de bediening in de pagina, maar is onzichtbaar */
+/* Vloeibaar glas: alleen de navigatie en de uitklapmenu's, en die tekent de Android-app zelf.
+   De knoppen blijven voor de plek en de bediening in de pagina, maar zijn onzichtbaar. */
 html.glass .appnav-pill, html.glass .appnav-add { visibility: hidden; }
 /* De lijst loopt echt onder het glas door */
 html.glass .edge-bottom { display: none; }
-
-/* Panelen van onderen */
-html.glass dialog .sheet {
-  background: var(--glass-fill);
-  -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur);
-  border: 0; box-shadow: var(--glass-rim), 0 -10px 34px rgba(0, 0, 0, .18);
-}
-html.glass dialog::backdrop { background: rgba(0, 0, 0, .1); -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); }
-html.glass .sheet .field, html.glass .sheet .btn, html.glass .sheet .ghost, html.glass .rule-box {
-  background: var(--glass-soft); border-color: transparent; box-shadow: inset 0 .5px 0 rgba(255, 255, 255, .35);
-}
-html.glass .sheet .field:focus { background: var(--glass-soft); border-color: var(--ink); }
-html.glass select.field { cursor: pointer; }
-html.glass .sheet .primary { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .22), 0 6px 16px rgba(0, 0, 0, .18); }
-
-/* Kopknoppen, zoeken en meldingen */
-html.glass .topbar .btn-group {
-  padding: 2px; border-radius: 14px; background: var(--glass-fill);
-  -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur);
-  box-shadow: var(--glass-rim), var(--glass-shadow);
-}
-html.glass .topbar .btn-group > button { background: transparent; }
-html.glass .topbar .btn-group > button:active { background: var(--glass-soft); }
-html.glass.searching .search, html.glass .results {
-  background: var(--glass-fill);
-  -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur);
-  border-color: transparent; box-shadow: var(--glass-rim), var(--glass-shadow);
-}
-html.glass.searching .search:focus-within { background: var(--glass-fill); border-color: transparent; box-shadow: var(--glass-rim), var(--glass-shadow); }
-html.glass.searching .scrim { background: rgba(10, 14, 24, .12); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); }
-html.glass .toast {
-  background: var(--glass-fill); color: var(--text); font-weight: 600;
-  -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur);
-  box-shadow: var(--glass-rim), var(--glass-shadow);
-}
-
-/* Inloggen en Instellingen: kaarten van glas op een zacht verloop */
-html.glass body:has(.auth), html.glass body:has(.settings) {
-  background:
-    radial-gradient(60vw 60vw at 12% 8%, rgba(47, 211, 255, .3), transparent 70%),
-    radial-gradient(70vw 70vw at 92% 34%, rgba(47, 111, 237, .22), transparent 72%),
-    radial-gradient(70vw 70vw at 20% 92%, rgba(255, 90, 140, .16), transparent 72%),
-    var(--bg);
-  background-attachment: fixed;
-}
-html.glass .auth-card, html.glass .settings .glass {
-  background: var(--glass-fill); border: 0;
-  -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur);
-  box-shadow: var(--glass-rim), var(--glass-shadow);
-}
-html.glass .auth-card .field, html.glass .settings .field { background: var(--glass-soft); box-shadow: inset 0 .5px 0 rgba(255, 255, 255, .35); }
