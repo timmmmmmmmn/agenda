@@ -1334,7 +1334,7 @@ const isAndroid = /Android/.test(navigator.userAgent);
 const promo = !isApp && (isIOS || isAndroid) ? (isIOS ? 'ios' : 'android') : null;
 
 function promoHtml() {
-  const img = '<img src="/icons/icon-192.png?v=3" alt="">';
+  const img = '<img src="/icons/icon-192.png?v=4" alt="">';
   if (promo === 'android') {
     return `<a class="promo" href="${RELEASES}" target="_blank" rel="noopener">${img}
       <span><strong>Download de Android-app</strong><span>APK van GitHub · werkt zich zelf bij</span></span></a>`;

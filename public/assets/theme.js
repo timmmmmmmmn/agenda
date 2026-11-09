@@ -35,7 +35,7 @@
 (function () {
   var img = new Image();
   var ready = new Promise(function (resolve) { img.onload = resolve; });
-  img.src = '/icons/kalender.png?v=1';
+  img.src = '/icons/kalender.png?v=2';
 
   function draw(size) {
     var c = document.createElement('canvas');
@@ -44,17 +44,18 @@
     g.drawImage(img, 0, 0, size, size);
     var day = String(new Date().getDate());
     var s = size / 512;
-    // Het witte vlak van de kalender loopt (op 512 px) van y 160 tot 452 en x 46 tot 466.
+    var font = '400 PXpx "Helvetica Neue", Helvetica, Arial, sans-serif';
+    // Het witte vlak van de kalender loopt (op 512 px) van y 151 tot 512 en x 28 tot 484.
     g.fillStyle = '#000';
     g.textAlign = 'center';
     g.textBaseline = 'alphabetic';
-    var px = 270;
-    g.font = '800 ' + px * s + 'px -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif';
+    var px = 336;
+    g.font = font.replace('PX', px * s);
     var m = g.measureText(day);
-    var w = m.width, max = 380 * s;
-    if (w > max) { px = px * max / w; g.font = '800 ' + px * s + 'px -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif'; m = g.measureText(day); }
+    var w = m.width, max = 370 * s;
+    if (w > max) { px = px * max / w; g.font = font.replace('PX', px * s); m = g.measureText(day); }
     var h = m.actualBoundingBoxAscent - m.actualBoundingBoxDescent;
-    g.fillText(day, 256 * s, 306 * s + h / 2);
+    g.fillText(day, 256 * s, 316 * s + h / 2);
     return c.toDataURL('image/png');
   }
 
