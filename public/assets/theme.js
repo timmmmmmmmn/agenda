@@ -35,7 +35,7 @@
 (function () {
   var img = new Image();
   var ready = new Promise(function (resolve) { img.onload = resolve; });
-  img.src = '/icons/kalender.png?v=2';
+  img.src = '/icons/kalender.png?v=3';
 
   function draw(size) {
     var c = document.createElement('canvas');
@@ -45,17 +45,17 @@
     var day = String(new Date().getDate());
     var s = size / 512;
     var font = '400 PXpx "Helvetica Neue", Helvetica, Arial, sans-serif';
-    // Het witte vlak van de kalender loopt (op 512 px) van y 151 tot 512 en x 28 tot 484.
+    // Het witte vlak van de kalender loopt (op 512 px) van y 206 tot 391 en x 139 tot 365.
     g.fillStyle = '#000';
     g.textAlign = 'center';
     g.textBaseline = 'alphabetic';
-    var px = 336;
+    var px = 166;
     g.font = font.replace('PX', px * s);
     var m = g.measureText(day);
-    var w = m.width, max = 370 * s;
+    var w = m.width, max = 181 * s;
     if (w > max) { px = px * max / w; g.font = font.replace('PX', px * s); m = g.measureText(day); }
     var h = m.actualBoundingBoxAscent - m.actualBoundingBoxDescent;
-    g.fillText(day, 256 * s, 316 * s + h / 2);
+    g.fillText(day, 252 * s, 287 * s + h / 2);
     return c.toDataURL('image/png');
   }
 

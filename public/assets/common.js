@@ -285,5 +285,5 @@ export function calStyle(hex) {
 
 // Logo met de datum van vandaag (getekend in theme.js).
 export function dateLogo(el) {
-  el.innerHTML = `<img data-datum src="${window.agendaDatumLogo || '/icons/kalender.png?v=2'}" alt="">`;
+  el.innerHTML = `<img data-datum src="${window.agendaDatumLogo || '/icons/kalender.png?v=3'}" alt="">`;
 }
