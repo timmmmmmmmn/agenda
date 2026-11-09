@@ -1,0 +1,54 @@
+{
+  "fill": {
+    "solid": "srgb:0.18824,0.20784,0.46667,1.00000"
+  },
+  "groups": [
+    {
+      "layers": [
+        {
+          "glass": true,
+          "image-name": "Tekst.png",
+          "name": "Tekst"
+        },
+        {
+          "glass": true,
+          "image-name": "Kop.png",
+          "name": "Kop"
+        }
+      ],
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.5
+      },
+      "translucency": {
+        "enabled": true,
+        "value": 0.4
+      }
+    },
+    {
+      "layers": [
+        {
+          "glass": true,
+          "image-name": "Datum.png",
+          "name": "Datum"
+        },
+        {
+          "glass": true,
+          "image-name": "Kaart.png",
+          "name": "Kaart"
+        }
+      ],
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.5
+      },
+      "translucency": {
+        "enabled": true,
+        "value": 0.4
+      }
+    }
+  ],
+  "supported-platforms": {
+    "squares": "shared"
+  }
+}

@@ -1,0 +1,30 @@
+/* Alleen in de Mac-app (html.mac): wat op de telefoon goed is, maar op een groot scherm niet. */
+
+/* Agenda: vensters als paneel in het midden in plaats van een blad van onderen. */
+html.mac.app dialog { margin: auto; width: min(560px, calc(100vw - 48px)); max-width: none; max-height: calc(100dvh - var(--sat) - 48px); }
+html.mac.app dialog .sheet { border-radius: 22px; border-bottom: 1px solid var(--border); padding-bottom: 22px; max-height: calc(100dvh - var(--sat) - 48px); box-shadow: var(--shadow-lg); }
+html.mac.app dialog .sheet::before { display: none; }
+html.mac.app dialog[open] .sheet { animation: sheet 180ms var(--ease) both; }
+
+
+/* Notities: het spiekbriefje (klein zwevend venster met één vaste notitie). */
+html.spiek .ed-top .back, html.spiek .nav { display: none !important; }
+html.spiek .ed-top { padding: 4px 8px 2px 14px; }
+html.spiek .ed-scroll { padding: 2px 16px 24px; }
+html.spiek .ed-title { font-size: 24px; margin-bottom: 4px; }
+html.spiek .toast { bottom: 16px; }
+
+/* Agenda (desktopstand): de bovenbalk van de website ís de titelbalk, naast de verkeerslichtjes.
+   Een lege plek vooraan in plaats van inspringen, zodat een tweede regel (smal venster) gewoon links begint. */
+html.mac:not(.app):not(.native) .shell { padding-top: 4px; }
+html.mac:not(.app):not(.native) .topbar { min-height: 44px; }
+html.mac:not(.app):not(.native) .topbar::before, html.mac:not(.app):not(.native) .auth-top::before { content: ''; flex: none; width: 62px; }
+html.mac:not(.app):not(.native) .auth { padding-top: 4px; }
+html.mac:not(.app):not(.native) .auth-top { min-height: 44px; justify-content: flex-start; }
+html.mac:not(.app):not(.native) .auth-top #themeBtn { margin-left: auto; }
+html.mac:not(.app):not(.native) .settings { padding-top: 4px; }
+html.mac:not(.app):not(.native) .settings-head { min-height: 44px; padding-left: max(0px, 86px - max(20px, (100vw - 1160px) / 2 + 20px)); }
+/* Vensters (nieuwe afspraak) blijven onder de titelbalk. */
+html.mac:not(.app):not(.native) dialog, html.mac:not(.app):not(.native) dialog .sheet { max-height: calc(100dvh - 120px); }
+/* Een Mac-app: geen tekst selecteren in knoppen en balken, wel in velden. */
+html.mac:not(.native) .topbar, html.mac:not(.native) .sidebar, html.mac:not(.native) .segmented { -webkit-user-select: none; user-select: none; }

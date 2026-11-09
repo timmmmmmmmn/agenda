@@ -66,3 +66,8 @@ Nieuwe migratie toevoegen in `migrations/` en uitvoeren met:
 ```sh
 npx wrangler d1 migrations apply agenda-db --remote
 ```
+
+## Mac-app
+
+`macos/` is Agenda als Mac-app in Rust (AppKit): de desktopversie van de site met de bovenbalk als
+titelbalk, en een menubalk met sneltoetsen. Installeren: `macos/install.sh`. Zie `macos/README.md`.

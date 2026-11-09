@@ -1,0 +1,36 @@
+# Maakt van de .icon-pakketten (lagen) een Assets.car: daarmee doen de iconen mee met de
+# heldere en getinte stijl van macOS. Daar is Xcode voor nodig, dus dat gebeurt hier.
+name: Mac-icoon
+on:
+  push:
+    paths: ["macos/icons/**", ".github/workflows/macos-iconen.yml"]
+  workflow_dispatch:
+
+jobs:
+  iconen:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - name: Nieuwste Xcode
+        run: |
+          XCODE=$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)
+          sudo xcode-select -s "$XCODE"
+          xcodebuild -version
+      - name: Assets.car maken
+        run: |
+          for APP in Agenda; do
+            OUT="macos/icons/$APP/build"
+            mkdir -p "$OUT"
+            xcrun actool "macos/icons/$APP/AppIcon.icon" --compile "$OUT" \
+              --app-icon AppIcon --platform macosx --target-device mac \
+              --minimum-deployment-target 26.0 --development-region nl \
+              --enable-on-demand-resources NO \
+              --output-partial-info-plist "$OUT/partial.plist" \
+              --output-format human-readable-text --notices --warnings --errors
+            ls -la "$OUT"
+            xcrun assetutil --info "$OUT/Assets.car" | head -60
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: iconen
+          path: macos/icons/*/build/
