@@ -42,11 +42,11 @@ function opScroll() {
   let eind = vorige + 1000;
   const stap = (nu) => {
     gemeten++;
-    if (nu - vorige > 34) traag++;
+    if (nu - vorige > 25) traag++;
     vorige = nu;
     if (nu < eind && gemeten < 240) { meet = requestAnimationFrame(stap); return; }
     meet = 0;
-    if (gemeten >= 90 && traag / gemeten > 0.2) stoppen();
+    if (gemeten >= 60 && traag / gemeten > 0.12) stoppen();
     else if (gemeten >= 240) removeEventListener('scroll', opScroll, true);
   };
   meet = requestAnimationFrame(stap);
@@ -67,6 +67,9 @@ stijl.textContent = `
 document.head.append(stijl);
 
 const svg = (html) => <span className="glisse-icoon" dangerouslySetInnerHTML={{ __html: html }} />;
+
+// Agenda/Notities: data-theme="donker"; Skitta: data-mode="dark".
+const donker = () => document.documentElement.dataset.theme === 'donker' || document.documentElement.dataset.mode === 'dark';
 
 function kleuren(host, donker) {
   host.dataset.theme = donker ? 'dark' : 'light';
@@ -127,7 +130,16 @@ export function balk({ onNav, onStop, z }) {
     onStop?.();
   };
   opgeven.add(stop);
-  return { update: (b) => flushSync(() => teken(b)), stop };
+  // De pagina meldt de balk vaak (synchroniseren, toetsenbord, navigeren); alleen bij een echte
+  // verandering opnieuw tekenen, want elke keer tekenen laat Glisse het glas opnieuw opbouwen.
+  let vorige = '';
+  const update = (b) => {
+    const nu = JSON.stringify(b);
+    if (nu === vorige) return;
+    vorige = nu;
+    flushSync(() => teken(b));
+  };
+  return { update, stop };
 }
 
 // ---------- Schuifknoppen (segmenten) ----------
@@ -154,12 +166,16 @@ export function segmenten(groep) {
     return Math.ceil(maat.offsetWidth) + 28;
   }));
 
+  let vorige = '';
   const teken = () => {
-    kleuren(host, document.documentElement.dataset.theme === 'donker');
+    kleuren(host, donker());
     host.hidden = groep.hidden;
     host.style.setProperty('--lg-tab-width', `${breedte()}px`);
     const items = knoppen().map((b, i) => ({ value: String(i), label: b.textContent.trim() }));
     const nu = keuze();
+    const sleutel = JSON.stringify([items, nu && knoppen().indexOf(nu), host.hidden, host.dataset.theme]);
+    if (sleutel === vorige) return;
+    vorige = sleutel;
     root.render(
       <SegmentedControl
         aria-label={groep.getAttribute('aria-label') || ''}
@@ -171,7 +187,7 @@ export function segmenten(groep) {
   };
   const kijk = new MutationObserver(teken);
   kijk.observe(groep, { subtree: true, attributes: true, attributeFilter: ['aria-pressed', 'aria-checked', 'hidden'], childList: true, characterData: true });
-  kijk.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  kijk.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'data-mode'] });
   teken();
 
   const stop = () => {
