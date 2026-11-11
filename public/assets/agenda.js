@@ -1,4 +1,4 @@
-import { api, esc, $, $$, icon, toast, showError, initials, calStyle, applyTheme, themePref, isApp, haptic, nativeSync, dateLogo, glassUi, glassMenu, glassMenuUpdate } from './common.js';
+import { api, esc, $, $$, icon, toast, showError, initials, calStyle, applyTheme, themePref, isApp, haptic, nativeSync, dateLogo, glassUi, glassMenu, glassMenuUpdate, glisse } from './common.js';
 
 const HOUR = 52;
 const MONTHS = ['januari', 'februari', 'maart', 'april', 'mei', 'juni', 'juli', 'augustus', 'september', 'oktober', 'november', 'december'];
@@ -1788,10 +1788,13 @@ function moreItems() {
   ];
 }
 
-// De glazen navigatie staat in de app; de pagina houdt de plek, de tabbladen en de stand bij.
+// De glazen navigatie staat in de app (of komt van Glisse); de pagina houdt de plek, de tabbladen en de stand bij.
 let barFrame = 0;
+let glisseBar = null;
 function syncGlassBar() {
-  if (!glassUi || barFrame) return;
+  // Zolang Glisse nog laadt geen native balk, anders flitst die even.
+  const wacht = document.documentElement.classList.contains('glisse') && !glisseBar;
+  if (!(glassUi || glisseBar) || wacht || barFrame) return;
   barFrame = requestAnimationFrame(() => {
     barFrame = 0;
     const box = (el) => {
@@ -1803,14 +1806,21 @@ function syncGlassBar() {
       title: b.lastElementChild.textContent,
       icon: b.dataset.nav === 'agenda' ? state.calView : b.dataset.nav
     }));
-    window.AgendaNative.glassBar(JSON.stringify({
+    const bar = {
       pill: box($('#appnavPill')),
       add: box($('#appnavAdd')),
       tabs,
       active: state.view === 'list' ? 'list' : 'agenda',
       dark: document.documentElement.getAttribute('data-theme') === 'donker',
       visible: !$('#dlg').open && !$('#moreDlg').open
-    }));
+    };
+    if (!glisseBar) return window.AgendaNative.glassBar(JSON.stringify(bar));
+    glisseBar.update({
+      ...bar,
+      tabs: tabs.map((t) => ({ ...t, svg: icon(t.icon) })),
+      addSvg: icon('plus'),
+      addLabel: $('#appnavAdd').getAttribute('aria-label')
+    });
   });
 }
 
@@ -1862,13 +1872,28 @@ function setupApp(newHere) {
     pickView(b.dataset.pick);
   });
   if (!glassUi) window.agendaGlassPick = pickView;
-  if (glassUi) {
-    window.agendaGlassNav = (id) => {
-      (id === 'add' ? $('#appnavAdd') : $(`#appnavPill [data-nav="${id}"]`))?.click();
-      if ((id === 'add' || id === 'search') && document.documentElement.classList.contains(id === 'search' ? 'searching' : 'app')) {
-        setTimeout(() => window.AgendaNative.showKeyboard(), 90);
-      }
-    };
+  const glassNav = (id) => {
+    (id === 'add' ? $('#appnavAdd') : $(`#appnavPill [data-nav="${id}"]`))?.click();
+    if ((id === 'add' || id === 'search') && document.documentElement.classList.contains(id === 'search' ? 'searching' : 'app')) {
+      setTimeout(() => window.AgendaNative?.showKeyboard?.(), 90);
+    }
+  };
+  if (glassUi) window.agendaGlassNav = glassNav;
+  glisse.then((g) => {
+    if (g) {
+      glisseBar = g.balk({
+        onNav: glassNav,
+        onStop: () => {
+          glisseBar = null;
+          document.documentElement.classList.remove('glisse');
+          syncGlassBar();
+        }
+      });
+      g.segmenten($('#scopeSeg'));
+    }
+    syncGlassBar();
+  });
+  if (glassUi || document.documentElement.classList.contains('glisse')) {
     addEventListener('resize', syncGlassBar);
     const watch = new MutationObserver(syncGlassBar);
     watch.observe($('#dlg'), { attributes: true, attributeFilter: ['open'] });

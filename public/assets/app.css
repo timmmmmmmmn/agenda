@@ -848,3 +848,6 @@ html.app .auth-card h1, html.app .settings-head h1 { font-family: var(--font-num
 html.glass .appnav-pill, html.glass .appnav-add { visibility: hidden; }
 /* De lijst loopt echt onder het glas door */
 html.glass .edge-bottom { display: none; }
+/* Glisse (glisse.js) tekent de navigatie in de pagina zelf, met echte breking; zie glisse/. */
+html.glisse .appnav-pill, html.glisse .appnav-add { visibility: hidden; }
+html.glisse .edge-bottom { display: none; }

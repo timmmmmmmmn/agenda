@@ -1,4 +1,4 @@
-import { api, esc, $, $$, icon, toast, copy, themePref, applyTheme, bindStrength } from './common.js';
+import { api, esc, $, $$, icon, toast, copy, themePref, applyTheme, bindStrength, glisse } from './common.js';
 
 const COLORS = ['#2F6FED', '#0E8A7E', '#1F9D61', '#E07A2E', '#D2552E', '#E5484D', '#8B5CF6', '#D6409F', '#5B6478'];
 let me;
@@ -237,6 +237,7 @@ async function init() {
     applyTheme(b.dataset.theme);
     paintThemeSeg();
   }));
+  glisse.then((g) => g?.segmenten($('#themeSeg')));
 
   $$('[data-copy]').forEach((b) => b.addEventListener('click', () => copy($(`#${b.dataset.copy}`).textContent)));
 

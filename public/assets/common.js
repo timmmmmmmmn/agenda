@@ -75,6 +75,14 @@ export function haptic(kind = 'tick') {
 // ---------- Glazen vormgeving (alleen Android-app, Android 13+) ----------
 
 export const glassUi = document.documentElement.classList.contains('glass');
+
+// Glisse (glisse.js, zie glisse/): null als het toestel het niet aankan, dan blijft alles zoals het was.
+export const glisse = document.documentElement.classList.contains('glisse')
+  ? import('./glisse.js').then((g) => (g.kan() ? g : null)).catch(() => null).then((g) => {
+    if (!g) document.documentElement.classList.remove('glisse');
+    return g;
+  })
+  : Promise.resolve(null);
 const boxOf = (el) => {
   const r = el.getBoundingClientRect();
   return { x: r.left, y: r.top, w: r.width, h: r.height };
