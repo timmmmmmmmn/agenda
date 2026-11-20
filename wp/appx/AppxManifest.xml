@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Windows 10 Mobile-app (hosted web app): opent https://agenda.timvanbergen.nl/?wp=1, de worker geeft dan de bestanden uit public/wp/ (wp/build.mjs).
+     Updates aan de site komen vanzelf in de app. Verhoog Version alleen bij een nieuw pakket (tegels, rechten);
+     Toko ziet aan dit nummer dat er een update is. -->
+<Package xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+         xmlns:mp="http://schemas.microsoft.com/appx/2014/phone/manifest"
+         xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+         IgnorableNamespaces="uap mp">
+  <Identity Name="TimvanBergen.Agenda" Publisher="CN=Tim van Bergen" Version="1.0.0.0" ProcessorArchitecture="neutral" />
+  <mp:PhoneIdentity PhoneProductId="9590656d-93c8-4179-8f7e-3cd66eba54ca" PhonePublisherId="00000000-0000-0000-0000-000000000000" />
+  <Properties>
+    <DisplayName>Agenda</DisplayName>
+    <PublisherDisplayName>Tim van Bergen</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+  </Properties>
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Universal" MinVersion="10.0.10240.0" MaxVersionTested="10.0.15063.0" />
+  </Dependencies>
+  <Resources>
+    <Resource Language="nl-NL" />
+  </Resources>
+  <Applications>
+    <Application Id="App" StartPage="https://agenda.timvanbergen.nl/?wp=1">
+      <uap:VisualElements DisplayName="Agenda" Description="Je eigen agenda, overal gelijk." BackgroundColor="#242564"
+                          Square150x150Logo="Assets\Square150x150Logo.png" Square44x44Logo="Assets\Square44x44Logo.png">
+        <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.png" Square71x71Logo="Assets\Square71x71Logo.png" ShortName="Agenda" />
+        <uap:SplashScreen Image="Assets\SplashScreen.png" BackgroundColor="#242564" />
+        <uap:InitialRotationPreference>
+          <uap:Rotation Preference="portrait" />
+        </uap:InitialRotationPreference>
+      </uap:VisualElements>
+      <uap:ApplicationContentUriRules>
+        <uap:Rule Match="https://agenda.timvanbergen.nl/" Type="include" WindowsRuntimeAccess="none" />
+      </uap:ApplicationContentUriRules>
+      <Extensions>
+        <!-- zo kan Toko de app openen -->
+        <uap:Extension Category="windows.protocol">
+          <uap:Protocol Name="tvb-agenda">
+            <uap:DisplayName>Agenda</uap:DisplayName>
+          </uap:Protocol>
+        </uap:Extension>
+      </Extensions>
+    </Application>
+  </Applications>
+  <Capabilities>
+    <Capability Name="internetClient" />
+  </Capabilities>
+</Package>

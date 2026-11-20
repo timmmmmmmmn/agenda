@@ -71,3 +71,7 @@ npx wrangler d1 migrations apply agenda-db --remote
 
 `macos/` is Agenda als Mac-app in Rust (AppKit): de desktopversie van de site met de bovenbalk als
 titelbalk, en een menubalk met sneltoetsen. Installeren: `macos/install.sh`. Zie `macos/README.md`.
+
+## Windows 10 Mobile (Lumia)
+
+`wp/build.mjs` maakt een versie voor EdgeHTML 13–15 in `public/wp/` (zelfde paden, modules als één ES2015-script met polyfills, CSS-variabelen ingevuld). De worker geeft oude Edge (en `?wp=1`, onthouden in een cookie) automatisch die bestanden. Na wijzigingen aan `public/`: `cd wp && npm install && node build.mjs`. De app (`wp/appx`, hosted web app) bouwt `.github/workflows/wp.yml` als `Agenda.appx`; installeren gaat via Toko (toko.timvanbergen.nl).

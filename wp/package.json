@@ -1,0 +1,25 @@
+{
+  "name": "wp",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "@swc/core": "^1.16.22",
+    "core-js": "^3.51.0",
+    "dialog-polyfill": "^0.5.6",
+    "esbuild": "^0.28.2",
+    "intersection-observer": "^0.12.2",
+    "lightningcss": "^1.33.0",
+    "postcss": "^8.5.33",
+    "postcss-custom-properties": "^15.0.5",
+    "regenerator-runtime": "^0.14.1",
+    "whatwg-fetch": "^3.6.20"
+  }
+}
